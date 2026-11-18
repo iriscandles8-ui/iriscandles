@@ -1,0 +1,114 @@
+---
+import '@fontsource/cinzel/400.css';
+import '@fontsource/cinzel/600.css';
+import '@fontsource/poppins/300.css';
+import '@fontsource/poppins/400.css';
+import '@fontsource/poppins/500.css';
+import '../styles/global.css';
+import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
+import SocialRail from '../components/SocialRail.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  noindex?: boolean;
+}
+
+const {
+  title = 'Iris Candles · Velas artesanales en Colombia',
+  description = 'Velas artesanales vertidas en pequeños lotes. Cuatro colecciones olfativas hechas en Colombia con cera de soya y mecha de algodón.',
+  image = '/brand/og-iris-candles.png',
+  noindex = false,
+} = Astro.props;
+
+const site = Astro.site ?? new URL('https://iriscandles.com');
+const canonical = new URL(Astro.url.pathname, site);
+const ogImage = new URL(image, site);
+const logoImage = new URL('/brand/logo-iris-candles.png', site);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Store',
+  name: 'Iris Candles',
+  url: site.href,
+  logo: logoImage.href,
+  image: ogImage.href,
+  description,
+  address: { '@type': 'PostalAddress', addressCountry: 'CO' },
+  currenciesAccepted: 'COP',
+  paymentAccepted: 'Nequi, Daviplata, Transferencia bancaria',
+};
+---
+
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#064B3B" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_CO" />
+    <meta property="og:site_name" content="Iris Candles" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Emblema de Iris Candles, velas artesanales colombianas" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </head>
+
+  <body>
+    <a
+      href="#contenido"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xs focus:bg-jade-900 focus:px-4 focus:py-3 focus:text-sm focus:text-cream-50"
+    >
+      Saltar al contenido
+    </a>
+
+    <Navbar />
+
+    <main id="contenido">
+      <slot />
+    </main>
+
+    <Footer />
+
+    <SocialRail />
+
+    <script>
+      const elements = document.querySelectorAll<HTMLElement>('[data-reveal]');
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (reduceMotion || !('IntersectionObserver' in window)) {
+        elements.forEach((element) => element.classList.add('is-visible'));
+      } else {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                observer.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
+        );
+
+        elements.forEach((element) => observer.observe(element));
+      }
+    </script>
+  </body>
+</html>

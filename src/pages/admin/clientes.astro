@@ -1,0 +1,428 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import { formatCOP, formatCompactCOP, formatDate, formatDateShort, initials } from '../../lib/admin';
+import { demoCustomers, demoOrders } from '../../data/admin-demo';
+import { getCustomers, getOrders } from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const customers = supabase ? await getCustomers(supabase) : demoCustomers;
+const orders = supabase ? await getOrders(supabase) : demoOrders;
+
+const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+const inactiveSince = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+
+const recurring = customers.filter((customer) => customer.orders > 1);
+const totalSpent = customers.reduce((sum, customer) => sum + customer.spent, 0);
+const totalOrders = customers.reduce((sum, customer) => sum + customer.orders, 0);
+const ticket = totalOrders ? Math.round(totalSpent / totalOrders) : 0;
+const birthdays = customers.filter((customer) => customer.birthday.slice(5, 7) === currentMonth);
+const inactive = customers.filter(
+  (customer) => !customer.lastOrder || customer.lastOrder < inactiveSince,
+);
+
+const segments = [
+  { id: 'all', label: 'Todos', count: customers.length },
+  { id: 'recurring', label: 'Recurrentes', count: recurring.length },
+  { id: 'new', label: 'Nuevos', count: customers.filter((customer) => customer.orders <= 1).length },
+  { id: 'birthday', label: 'Cumpleaños', count: birthdays.length },
+  { id: 'inactive', label: 'Inactivos', count: inactive.length },
+];
+
+const csvRows = [
+  ['Cliente', 'Correo', 'Teléfono', 'Ciudad', 'Pedidos', 'Total gastado COP', 'Último pedido', 'Cumpleaños', 'Puntos'],
+  ...customers.map((customer) => [
+    customer.name,
+    customer.email,
+    customer.phone,
+    customer.city,
+    customer.orders,
+    customer.spent,
+    customer.lastOrder ?? '—',
+    customer.birthday,
+    customer.points,
+  ]),
+];
+---
+
+<AdminLayout title="Clientes" section="Clientes">
+  <PageHeader
+    eyebrow="Operación"
+    title="Clientes"
+    description="Perfiles, historial de compras y cumpleaños. Conoce a quién le estás encendiendo la casa."
+  >
+    <button type="button" slot="actions" class="admin-btn admin-btn-outline" data-export-customers>
+      <AdminIcon name="download" size={14} />
+      Exportar CSV
+    </button>
+    <button type="button" slot="actions" class="admin-btn admin-btn-primary" data-campaign>
+      <AdminIcon name="mail" size={14} />
+      Enviar campaña
+    </button>
+  </PageHeader>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard label="Clientes" value={String(customers.length)} icon="users" hint={`${recurring.length} recurrentes`} />
+    <StatCard label="Ticket promedio" value={formatCompactCOP(ticket)} icon="chart" hint="histórico" />
+    <StatCard label="Cumpleaños de noviembre" value={String(birthdays.length)} icon="gift" hint="envía un saludo" />
+    <StatCard label="Sin compra reciente" value={String(inactive.length)} icon="clock" hint="más de 60 días" />
+  </section>
+
+  <section class="admin-card mt-5">
+    <div class="admin-card-head gap-3">
+      <div class="relative w-full sm:max-w-xs">
+        <AdminIcon name="search" size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/35" />
+        <input
+          type="search"
+          id="customer-search"
+          class="admin-input pl-9"
+          placeholder="Buscar por nombre, correo o ciudad…"
+          aria-label="Buscar clientes"
+        />
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        {
+          segments.map((segment) => (
+            <button type="button" class:list={['admin-chip', segment.id === 'all' && 'is-active']} data-customer-filter={segment.id}>
+              {segment.label}
+              <span class="count">{segment.count}</span>
+            </button>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Ciudad</th>
+            <th class="num">Pedidos</th>
+            <th class="num">Total gastado</th>
+            <th>Último pedido</th>
+            <th class="num">Puntos</th>
+            <th>Cumpleaños</th>
+            <th class="text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="customers-body">
+          {
+            customers.map((customer) => (
+              <tr
+                class="is-clickable"
+                data-customer-row={customer.id}
+                data-orders={customer.orders}
+                data-birthday={customer.birthday.slice(5, 7)}
+                data-last-order={customer.lastOrder ?? ''}
+              >
+                <td>
+                  <div class="flex items-center gap-2.5">
+                    <span class="admin-avatar">{initials(customer.name)}</span>
+                    <div>
+                      <p class="font-medium text-jade-900">{customer.name}</p>
+                      <p class="text-[0.66rem] text-ink/40">{customer.email}</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="text-ink/55">{customer.city}</td>
+                <td class="num text-ink/70">{customer.orders}</td>
+                <td class="num font-medium text-jade-900">{formatCOP(customer.spent)}</td>
+                <td class="whitespace-nowrap text-ink/55">{customer.lastOrder ? formatDateShort(customer.lastOrder) : 'Sin compras'}</td>
+                <td class="num text-ink/60">{customer.points.toLocaleString('es-CO')}</td>
+                <td class="whitespace-nowrap text-ink/55">{formatDate(customer.birthday)}</td>
+                <td class="text-right">
+                  <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-open-customer={customer.id}>
+                    Ver
+                  </button>
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-cream-300 px-4 py-3 text-[0.68rem] text-ink/45">
+      <span data-customers-count>Mostrando {customers.length} clientes</span>
+      <span>Los datos personales se tratan según la Ley 1581 de 2012.</span>
+    </div>
+  </section>
+
+  {
+    birthdays.length > 0 && (
+      <section class="mt-5 border border-blush-300 bg-blush-200/20 p-5">
+        <div class="flex flex-wrap items-center gap-4">
+          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-cream-50 text-terracotta-700">
+            <AdminIcon name="gift" size={18} />
+          </span>
+          <div class="flex-1">
+            <h2 class="font-display text-lg text-jade-900">Cumpleaños de noviembre</h2>
+            <p class="mt-1 text-[0.75rem] text-ink/55">
+              {birthdays.map((customer) => customer.name).join(' · ')}. Envía un cupón del 15% con
+              el código <span class="font-medium text-terracotta-700">CUMPLE15</span>.
+            </p>
+          </div>
+          <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" data-birthday-send>
+            Enviar saludos
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  <!-- Detalle cliente -->
+  <div id="customer-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="customer-modal-title">
+    <div class="admin-modal-panel is-wide">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Perfil de cliente</p>
+          <h2 id="customer-modal-title" class="admin-card-title mt-1">Cliente</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="customer-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div id="customer-detail-body" class="admin-modal-body"></div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script type="application/json" id="customers-data" set:html={JSON.stringify(customers)}></script>
+<script type="application/json" id="customer-orders-data" set:html={JSON.stringify(orders)}></script>
+<script type="application/json" id="customers-csv" set:html={JSON.stringify(csvRows)}></script>
+
+<script>
+  import { formatCOP, formatDate, formatDateShort, downloadCsv, initials, ORDER_STATUS } from '../../lib/admin';
+
+  type Customer = {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    city: string;
+    orders: number;
+    spent: number;
+    lastOrder: string | null;
+    birthday: string;
+    points: number;
+    createdAt: string;
+  };
+
+  type Order = {
+    id: string;
+    number: string;
+    customer: string;
+    email: string;
+    city: string;
+    status: string;
+    total: number;
+    createdAt: string;
+    items: { name: string; size: string; quantity: number }[];
+  };
+
+  const customers: Customer[] = JSON.parse(document.getElementById('customers-data')?.textContent ?? '[]');
+  const orders: Order[] = JSON.parse(document.getElementById('customer-orders-data')?.textContent ?? '[]');
+  const byId = new Map(customers.map((customer) => [customer.id, customer]));
+
+  const tbody = document.getElementById('customers-body');
+  const search = document.getElementById('customer-search') as HTMLInputElement | null;
+  const countLabel = document.querySelector<HTMLElement>('[data-customers-count]');
+  const chips = document.querySelectorAll<HTMLButtonElement>('[data-customer-filter]');
+  const detailBody = document.getElementById('customer-detail-body');
+  const detailTitle = document.getElementById('customer-modal-title');
+
+  let activeFilter = 'all';
+
+  const escapeHtml = (value: string): string =>
+    value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
+
+  function applyFilters() {
+    if (!tbody) return;
+    const term = (search?.value ?? '').trim().toLowerCase();
+    let visible = 0;
+
+    tbody.querySelectorAll<HTMLTableRowElement>('tr[data-customer-row]').forEach((row) => {
+      const customer = byId.get(row.dataset.customerRow ?? '');
+      const isRecurring = Number(row.dataset.orders) > 1;
+      const isBirthday = row.dataset.birthday === '11';
+      const lastOrder = row.dataset.lastOrder ?? '';
+      const isInactive = !lastOrder || lastOrder < '2026-09-12';
+
+      const matchesFilter =
+        activeFilter === 'all' ||
+        (activeFilter === 'recurring' && isRecurring) ||
+        (activeFilter === 'new' && !isRecurring) ||
+        (activeFilter === 'birthday' && isBirthday) ||
+        (activeFilter === 'inactive' && isInactive);
+
+      const haystack = `${customer?.name} ${customer?.email} ${customer?.city}`.toLowerCase();
+      const matchesSearch = term === '' || haystack.includes(term);
+      const show = matchesFilter && matchesSearch;
+      row.classList.toggle('hidden', !show);
+      if (show) visible += 1;
+    });
+
+    if (countLabel) {
+      countLabel.textContent =
+        visible === 1 ? 'Mostrando 1 cliente' : `Mostrando ${visible} de ${customers.length} clientes`;
+    }
+  }
+
+  function openCustomer(id: string) {
+    const customer = byId.get(id);
+    if (!customer || !detailBody) return;
+
+    const history = orders
+      .filter((order) => order.email.toLowerCase() === customer.email.toLowerCase())
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    if (detailTitle) detailTitle.textContent = customer.name;
+
+    detailBody.innerHTML = `
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <span class="admin-avatar h-12 w-12 text-sm">${initials(customer.name)}</span>
+          <div>
+            <p class="font-display text-xl text-jade-900">${escapeHtml(customer.name)}</p>
+            <p class="text-[0.72rem] text-ink/50">${escapeHtml(customer.email)} · ${escapeHtml(customer.phone)}</p>
+            <p class="text-[0.68rem] text-ink/40">Cliente desde ${formatDate(customer.createdAt)}</p>
+          </div>
+        </div>
+        <span class="admin-badge" data-tone="${customer.orders > 1 ? 'jade' : 'amber'}">
+          ${customer.orders > 1 ? 'Recurrente' : 'Nuevo'}
+        </span>
+      </div>
+
+      <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="border border-cream-300 bg-cream-50 p-3">
+          <p class="text-[0.56rem] uppercase tracking-[0.14em] text-jade-900/45">Pedidos</p>
+          <p class="mt-1 font-display text-xl text-jade-900">${customer.orders}</p>
+        </div>
+        <div class="border border-cream-300 bg-cream-50 p-3">
+          <p class="text-[0.56rem] uppercase tracking-[0.14em] text-jade-900/45">Total gastado</p>
+          <p class="mt-1 font-display text-xl text-jade-900">${formatCOP(customer.spent)}</p>
+        </div>
+        <div class="border border-cream-300 bg-cream-50 p-3">
+          <p class="text-[0.56rem] uppercase tracking-[0.14em] text-jade-900/45">Ticket promedio</p>
+          <p class="mt-1 font-display text-xl text-jade-900">${formatCOP(customer.orders ? Math.round(customer.spent / customer.orders) : 0)}</p>
+        </div>
+        <div class="border border-cream-300 bg-cream-50 p-3">
+          <p class="text-[0.56rem] uppercase tracking-[0.14em] text-jade-900/45">Puntos</p>
+          <p class="mt-1 font-display text-xl text-jade-900">${customer.points.toLocaleString('es-CO')}</p>
+        </div>
+      </div>
+
+      <div class="mt-5 grid gap-3 sm:grid-cols-2">
+        <div class="border border-cream-300 bg-cream-50 p-3.5">
+          <p class="text-[0.56rem] uppercase tracking-[0.14em] text-jade-900/45">Datos</p>
+          <p class="mt-1.5 text-[0.75rem] text-ink/60">Ciudad: ${escapeHtml(customer.city)}</p>
+          <p class="text-[0.75rem] text-ink/60">Cumpleaños: ${formatDate(customer.birthday)}</p>
+          <p class="text-[0.75rem] text-ink/60">Última compra: ${customer.lastOrder ? formatDateShort(customer.lastOrder) : 'Sin compras'}</p>
+        </div>
+        <div class="border border-cream-300 bg-cream-50 p-3.5">
+          <p class="text-[0.56rem] uppercase tracking-[0.14em] text-jade-900/45">Fidelización</p>
+          <p class="mt-1.5 text-[0.75rem] leading-relaxed text-ink/60">
+            ${customer.points} puntos equivalen a ${formatCOP(customer.points * 100)} en su próxima compra.
+          </p>
+          <button type="button" class="admin-btn admin-btn-outline admin-btn-sm mt-2" data-add-points="${customer.id}">
+            Ajustar puntos
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <p class="mb-2 text-[0.56rem] uppercase tracking-[0.14em] text-jade-900/45">Historial de compras</p>
+        ${
+          history.length
+            ? `<div class="border border-cream-300">
+                <table class="admin-table">
+                  <thead><tr><th>Pedido</th><th>Fecha</th><th>Productos</th><th>Estado</th><th class="num">Total</th></tr></thead>
+                  <tbody>
+                    ${history
+                      .map((order) => {
+                        const status = ORDER_STATUS[order.status] ?? { label: order.status, tone: 'slate' };
+                        const items = order.items.map((item) => `${item.name} ${item.size}`).join(', ');
+                        return `<tr>
+                          <td class="font-medium text-jade-900">${order.number}</td>
+                          <td class="whitespace-nowrap text-ink/55">${formatDateShort(order.createdAt)}</td>
+                          <td class="text-[0.7rem] text-ink/55">${escapeHtml(items)}</td>
+                          <td><span class="admin-badge" data-tone="${status.tone}">${status.label}</span></td>
+                          <td class="num font-medium text-jade-900">${formatCOP(order.total)}</td>
+                        </tr>`;
+                      })
+                      .join('')}
+                  </tbody>
+                </table>
+              </div>`
+            : '<p class="border border-dashed border-cream-300 p-4 text-[0.75rem] text-ink/40">Todavía no tiene pedidos pagados.</p>'
+        }
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-2 border-t border-cream-300 pt-4">
+        <a href="mailto:${customer.email}" class="admin-btn admin-btn-primary">Escribir correo</a>
+        <button type="button" class="admin-btn admin-btn-outline" data-send-coupon="${customer.id}">Enviar cupón</button>
+        <a href="https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}" target="_blank" rel="noopener" class="admin-btn admin-btn-ghost">WhatsApp</a>
+      </div>
+    `;
+
+    (window as any).openAdminModal('customer-modal');
+  }
+
+  tbody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const button = target.closest<HTMLElement>('[data-open-customer]');
+    const row = target.closest<HTMLElement>('[data-customer-row]');
+    const id = button?.dataset.openCustomer ?? row?.dataset.customerRow;
+    if (id) openCustomer(id);
+  });
+
+  detailBody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-add-points]')) {
+      const value = window.prompt('¿Cuántos puntos deseas sumar o restar? Usa un número negativo para restar.', '50');
+      if (value === null) return;
+      (window as any).adminToast(`Puntos ajustados en ${value} (demo).`);
+    }
+    if (target.closest('[data-send-coupon]')) {
+      (window as any).adminToast('Cupón CUMPLE15 enviado por correo (demo).');
+    }
+  });
+
+  search?.addEventListener('input', applyFilters);
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      activeFilter = chip.dataset.customerFilter ?? 'all';
+      chips.forEach((item) => item.classList.toggle('is-active', item === chip));
+      applyFilters();
+    });
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.closeModal;
+      if (id) (window as any).closeAdminModal(id);
+    });
+  });
+
+  document.querySelector('[data-export-customers]')?.addEventListener('click', () => {
+    const rows = JSON.parse(document.getElementById('customers-csv')?.textContent ?? '[]');
+    downloadCsv('iris-clientes.csv', rows);
+    (window as any).adminToast('Clientes exportados en CSV.');
+  });
+
+  document.querySelector('[data-campaign]')?.addEventListener('click', () => {
+    (window as any).adminToast('Campaña preparada para los suscriptores de Cartas de Iris (demo).');
+  });
+
+  document.querySelector('[data-birthday-send]')?.addEventListener('click', () => {
+    (window as any).adminToast('Saludos de cumpleaños enviados con el cupón CUMPLE15 (demo).');
+  });
+</script>

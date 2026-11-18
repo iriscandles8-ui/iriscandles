@@ -1,0 +1,108 @@
+---
+import Base from '../layouts/Base.astro';
+
+const sections = [
+  {
+    id: 'envios',
+    title: 'Envíos',
+    body: [
+      'Enviamos a toda Colombia con transportadora aliada. La tarifa se calcula por peso y destino al finalizar la compra.',
+      'Los pedidos se despachan entre 1 y 3 días hábiles después del pago. En temporadas altas (diciembre y fechas especiales) el tiempo puede extenderse; lo avisamos por correo.',
+      'En Bogotá puedes recoger en el taller con cita previa, sin costo de envío.',
+    ],
+  },
+  {
+    id: 'devoluciones',
+    title: 'Cambios y devoluciones',
+    body: [
+      'Si tu vela llega rota o con un defecto, escríbenos dentro de los 5 días siguientes a la entrega con una foto del producto y del empaque. Te enviamos un reemplazo o devolvemos el dinero.',
+      'Por razones de higiene y seguridad, no aceptamos devoluciones de velas que ya hayan sido encendidas.',
+      'Los costos de envío por cambios por talla o aroma corren por cuenta del cliente, salvo error nuestro.',
+    ],
+  },
+  {
+    id: 'privacidad',
+    title: 'Política de privacidad',
+    body: [
+      'Tratamos tus datos personales conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013 de Colombia. Usamos tu información para procesar pedidos, responder solicitudes y enviar comunicaciones si autorizas el envío.',
+      'Puedes solicitar acceso, corrección o eliminación de tus datos escribiendo a hola@iriscandles.com. No vendemos ni compartimos tus datos con terceros ajenos a la operación de la tienda.',
+      'Los pagos se coordinan por WhatsApp con Nequi, Daviplata o transferencia bancaria. Iris Candles no almacena números de tarjeta ni datos financieros.',
+    ],
+  },
+  {
+    id: 'terminos',
+    title: 'Términos y condiciones',
+    body: [
+      'Los precios se expresan en pesos colombianos (COP) e incluyen IVA cuando aplique. Las fotografías son de referencia; al ser productos artesanales, pueden existir variaciones mínimas de color y acabado.',
+      'La compra se confirma cuando verificamos el pago. En caso de error de precio o falta de stock, nos comunicaremos para ofrecer una alternativa o el reembolso total.',
+      'El uso de esta tienda implica la aceptación de estos términos.',
+    ],
+  },
+  {
+    id: 'faq',
+    title: 'Preguntas frecuentes',
+    body: [
+      '¿Cuánto dura una vela? Entre 40 y 55 horas según el tamaño y el cuidado. Recomendamos sesiones de 2 a 3 horas y recortar la mecha a 5 mm.',
+      '¿Hacen pedidos para eventos? Sí, desde 15 unidades. Usa el formulario de eventos para recibir una cotización.',
+      '¿Cómo pago? Coordinamos el pago por WhatsApp con Nequi, Daviplata o transferencia bancaria. Confirmamos el pedido cuando el dinero llega. El pago contra entrega se evaluará más adelante.',
+      '¿Las velas son veganas? Usamos cera de soya y fragancias sin ftalatos. Escríbenos si necesitas el detalle completo de ingredientes.',
+    ],
+  },
+];
+---
+
+<Base
+  title="Ayuda y legales · Iris Candles"
+  description="Envíos, devoluciones, privacidad, términos y preguntas frecuentes de Iris Candles."
+>
+  <section class="border-b border-cream-300 bg-cream-100/40">
+    <div class="container-iris py-14 lg:py-20">
+      <p class="eyebrow text-terracotta-700">Ayuda</p>
+      <h1 class="mt-4 font-display text-4xl text-jade-900 sm:text-5xl">Todo claro</h1>
+      <p class="mt-4 max-w-xl text-base leading-relaxed text-ink/70">
+        Envíos, cambios, privacidad y las respuestas que más nos preguntan.
+      </p>
+    </div>
+  </section>
+
+  <section class="py-14 lg:py-20">
+    <div class="container-iris grid gap-12 lg:grid-cols-12">
+      <nav class="lg:col-span-3" aria-label="Contenido legal">
+        <ul class="space-y-2 lg:sticky lg:top-28">
+          {
+            sections.map((section) => (
+              <li>
+                <a
+                  href={`#${section.id}`}
+                  class="text-sm text-jade-900/60 transition-colors hover:text-jade-900"
+                >
+                  {section.title}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+
+      <div class="space-y-14 lg:col-span-9">
+        <p class="border-l-2 border-terracotta-600 bg-cream-100/60 px-4 py-3 text-xs leading-relaxed text-ink/60">
+          Documento base pendiente de revisión legal antes de publicar. Los datos de contacto y
+          las condiciones finales se ajustarán con la marca.
+        </p>
+
+        {
+          sections.map((section) => (
+            <section id={section.id} class="scroll-mt-28">
+              <h2 class="font-display text-2xl text-jade-900 sm:text-3xl">{section.title}</h2>
+              <div class="mt-4 space-y-3 text-sm leading-relaxed text-ink/70">
+                {section.body.map((paragraph) => (
+                  <p>{paragraph}</p>
+                ))}
+              </div>
+            </section>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+</Base>

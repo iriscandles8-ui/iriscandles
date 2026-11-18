@@ -1,0 +1,47 @@
+---
+import AdminIcon from './AdminIcon.astro';
+
+interface Props {
+  label: string;
+  value: string;
+  hint?: string;
+  delta?: number | null;
+  deltaLabel?: string;
+  icon?: string;
+  invertDelta?: boolean;
+}
+
+const { label, value, hint, delta = null, deltaLabel, icon = 'chart', invertDelta = false } = Astro.props;
+const positive = delta !== null && (invertDelta ? delta < 0 : delta >= 0);
+---
+
+<div class="admin-kpi">
+  <div class="relative z-10">
+    <div class="flex items-start justify-between gap-3">
+      <p class="text-[0.63rem] font-medium uppercase tracking-[0.14em] text-jade-900/55">{label}</p>
+      <span class="grid h-7 w-7 place-items-center rounded-xs bg-jade-50 text-jade-800">
+        <AdminIcon name={icon} size={15} />
+      </span>
+    </div>
+
+    <p class="mt-2 font-display text-[1.7rem] leading-none tracking-tight text-jade-900">{value}</p>
+
+    <div class="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+      {
+        delta !== null && (
+          <span
+            class:list={[
+              'inline-flex items-center gap-0.5 text-[0.68rem] font-medium',
+              positive ? 'text-jade-700' : 'text-rose-700',
+            ]}
+          >
+            <AdminIcon name={delta >= 0 ? 'arrowUp' : 'arrowDown'} size={12} />
+            {Math.abs(delta).toFixed(1).replace('.', ',')}%
+          </span>
+        )
+      }
+      {hint && <span class="text-[0.66rem] text-ink/45">{hint}</span>}
+      {deltaLabel && <span class="text-[0.66rem] text-ink/35">· {deltaLabel}</span>}
+    </div>
+  </div>
+</div>

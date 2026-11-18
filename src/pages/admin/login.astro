@@ -1,0 +1,347 @@
+---
+import '@fontsource/cinzel/400.css';
+import '@fontsource/cinzel/600.css';
+import '@fontsource/poppins/300.css';
+import '@fontsource/poppins/400.css';
+import '@fontsource/poppins/500.css';
+import '../../styles/global.css';
+import '../../styles/admin.css';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import { isDemoMode } from '../../lib/admin';
+---
+
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acceso al panel · Iris Candles</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#032e24" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+
+  <body class="admin-body">
+    <main class="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
+      <section class="relative hidden overflow-hidden bg-jade-950 p-12 text-cream-50 lg:flex lg:flex-col lg:justify-between">
+        <div class="texture-paper pointer-events-none absolute inset-0 opacity-[0.05]"></div>
+        <div class="pointer-events-none absolute -right-24 top-1/4 h-72 w-72 rounded-full bg-terracotta-600/20 blur-3xl"></div>
+
+        <div class="relative">
+          <a href="/" class="inline-flex items-center gap-3">
+            <img
+              src="/brand/logo-iris-candles.svg"
+              alt="Iris Candles"
+              class="h-12 w-12 object-contain"
+            />
+            <span>
+              <span class="block font-display text-base tracking-[0.18em]">IRIS</span>
+              <span class="block text-[0.55rem] uppercase tracking-[0.26em] text-cream-50/50">
+                Velas artesanales
+              </span>
+            </span>
+          </a>
+        </div>
+
+        <div class="relative max-w-md">
+          <p class="eyebrow flex items-center gap-3 text-blush-200">
+            <span class="h-px w-8 bg-blush-200/60"></span>
+            Espacio privado
+          </p>
+          <h1 class="mt-6 font-display text-4xl leading-[1.12] text-cream-50">
+            El taller,<br />por dentro.
+          </h1>
+          <p class="mt-5 text-sm leading-relaxed text-cream-50/60">
+            Pedidos, inventario, clientes y estadísticas en un solo lugar. Solo la propietaria
+            y las personas que ella autorice pueden entrar.
+          </p>
+
+          <ul class="mt-8 space-y-3 text-[0.8rem] text-cream-50/70">
+            {
+              [
+                ['bag', 'Pedidos y despachos'],
+                ['box', 'Inventario y materias primas'],
+                ['star', 'Reseñas y comunidad'],
+                ['chart', 'Ventas y productos más vendidos'],
+              ].map(([icon, label]) => (
+                <li class="flex items-center gap-3">
+                  <span class="grid h-7 w-7 place-items-center rounded-xs border border-cream-50/15 text-blush-200">
+                    <AdminIcon name={icon} size={14} />
+                  </span>
+                  {label}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+
+        <p class="relative text-[0.62rem] uppercase tracking-[0.18em] text-cream-50/30">
+          Hecho a mano en Colombia · Panel v0.1
+        </p>
+      </section>
+
+      <section class="flex items-center justify-center px-5 py-12 sm:px-10">
+        <div class="w-full max-w-sm">
+          <a href="/" class="mb-10 inline-flex items-center gap-2.5 lg:hidden">
+            <img
+              src="/brand/logo-iris-candles.svg"
+              alt="Iris Candles"
+              class="h-10 w-10 object-contain"
+            />
+            <span class="font-display text-sm tracking-[0.16em] text-jade-900">IRIS CANDLES</span>
+          </a>
+
+          <p class="text-[0.6rem] font-medium uppercase tracking-[0.2em] text-terracotta-700">
+            Acceso privado
+          </p>
+          <h1 class="mt-3 font-display text-3xl text-jade-900">Panel de administración</h1>
+          <p class="mt-3 text-sm leading-relaxed text-ink/60">
+            Ingresa con la cuenta autorizada por Iris Candles.
+          </p>
+
+          {
+            isDemoMode && (
+              <div class="mt-6 flex gap-3 border border-amber-200 bg-amber-50 p-3.5 text-[0.72rem] leading-relaxed text-amber-900">
+                <AdminIcon name="alert" size={16} class="mt-0.5 shrink-0" />
+                <p>
+                  <strong class="font-semibold">Modo demostración.</strong> Supabase aún no está
+                  conectado. Puedes entrar con cualquier correo y contraseña para explorar el panel
+                  con datos de ejemplo.
+                </p>
+              </div>
+            )
+          }
+
+          <div
+            data-error
+            class="mt-6 hidden items-start gap-2 border border-rose-200 bg-rose-50 p-3 text-[0.72rem] leading-relaxed text-rose-800"
+          >
+            <AdminIcon name="alert" size={15} class="mt-0.5 shrink-0" />
+            <p data-error-text></p>
+          </div>
+
+          <form id="login-form" class="mt-6 space-y-4" novalidate>
+            <div>
+              <label class="admin-label" for="login-email">Correo electrónico</label>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                autocomplete="username"
+                required
+                class="admin-input"
+                placeholder="hola@iriscandles.com"
+                value={isDemoMode ? 'hola@iriscandles.com' : ''}
+              />
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between">
+                <label class="admin-label" for="login-password">Contraseña</label>
+                <button
+                  type="button"
+                  data-forgot
+                  class="mb-1 text-[0.65rem] text-jade-900/55 underline-offset-2 hover:text-jade-900 hover:underline"
+                >
+                  ¿La olvidaste?
+                </button>
+              </div>
+              <div class="relative">
+                <input
+                  id="login-password"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                  minlength="6"
+                  class="admin-input pr-10"
+                  placeholder="••••••••"
+                  value={isDemoMode ? 'demo1234' : ''}
+                />
+                <button
+                  type="button"
+                  data-toggle-password
+                  class="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-ink/40 hover:text-jade-900"
+                  aria-label="Mostrar contraseña"
+                >
+                  <AdminIcon name="eye" size={15} />
+                </button>
+              </div>
+            </div>
+
+            <label class="flex items-center gap-2 text-[0.7rem] text-ink/55">
+              <input type="checkbox" name="remember" checked class="h-3.5 w-3.5 accent-jade-900" />
+              Mantener la sesión abierta en este equipo
+            </label>
+
+            <button type="submit" class="admin-btn admin-btn-primary w-full py-3" data-submit>
+              Entrar al panel
+            </button>
+          </form>
+
+          <p data-status role="status" aria-live="polite" class="mt-3 text-center text-[0.7rem] text-ink/50"></p>
+
+          {
+            isDemoMode && (
+              <details class="mt-8 border border-cream-300 bg-cream-50/70 p-4 text-[0.72rem] leading-relaxed text-ink/60">
+                <summary class="cursor-pointer font-medium text-jade-900">
+                  Cómo conectar Supabase (5 pasos)
+                </summary>
+                <ol class="mt-3 list-decimal space-y-1.5 pl-4">
+                  <li>Crea un proyecto gratuito en supabase.com.</li>
+                  <li>
+                    En <em>SQL Editor</em>, ejecuta <code class="text-jade-900">db/schema.sql</code> y
+                    luego <code class="text-jade-900">db/admin.sql</code>.
+                  </li>
+                  <li>En <em>Authentication → Users</em>, crea tu usuario con correo y contraseña.</li>
+                  <li>
+                    Copia su UUID y ejecuta
+                    <code class="text-jade-900">insert into admin_users (user_id, role) values ('…', 'owner');</code>
+                  </li>
+                  <li>
+                    Agrega <code class="text-jade-900">PUBLIC_SUPABASE_URL</code> y
+                    <code class="text-jade-900">PUBLIC_SUPABASE_ANON_KEY</code> al archivo
+                    <code class="text-jade-900">.env</code>.
+                  </li>
+                </ol>
+                <p class="mt-3">
+                  La guía completa está en
+                  <a href="/admin/configuracion#conexion" class="border-b border-terracotta-600/40 text-jade-900">
+                    Configuración → Conexión
+                  </a>.
+                </p>
+              </details>
+            )
+          }
+
+          <p class="mt-8 text-center text-[0.65rem] leading-relaxed text-ink/35">
+            Si no deberías tener acceso a esta página, cierra la sesión y escríbenos a
+            hola@iriscandles.com.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      import { supabase } from '../../lib/supabase';
+      import { getAdminSession, isDemoMode } from '../../lib/admin';
+
+      const form = document.getElementById('login-form') as HTMLFormElement | null;
+      const emailInput = document.getElementById('login-email') as HTMLInputElement | null;
+      const passwordInput = document.getElementById('login-password') as HTMLInputElement | null;
+      const errorBox = document.querySelector<HTMLElement>('[data-error]');
+      const errorText = document.querySelector<HTMLElement>('[data-error-text]');
+      const status = document.querySelector<HTMLElement>('[data-status]');
+      const submit = document.querySelector<HTMLButtonElement>('[data-submit]');
+      const toggle = document.querySelector<HTMLButtonElement>('[data-toggle-password]');
+      const forgot = document.querySelector<HTMLButtonElement>('[data-forgot]');
+
+      const params = new URLSearchParams(window.location.search);
+      const nextParam = params.get('next');
+      const next = nextParam && nextParam.startsWith('/admin') ? nextParam : '/admin';
+
+      function showError(message: string) {
+        if (!errorBox || !errorText) return;
+        errorText.textContent = message;
+        errorBox.classList.remove('hidden');
+        errorBox.classList.add('flex');
+      }
+
+      if (params.get('error') === 'unauthorized') {
+        showError('Tu cuenta no tiene permisos para el panel. Pide a la propietaria que te autorice.');
+      }
+
+      if (isDemoMode) {
+        if (status) status.textContent = 'Demo: cualquier credencial abre el panel.';
+      } else if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          const session = await getAdminSession();
+          if (session) window.location.replace(next);
+        }
+      }
+
+      toggle?.addEventListener('click', () => {
+        if (!passwordInput) return;
+        const show = passwordInput.type === 'password';
+        passwordInput.type = show ? 'text' : 'password';
+        toggle.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+      });
+
+      forgot?.addEventListener('click', async () => {
+        const email = emailInput?.value.trim() ?? '';
+        if (!email) {
+          showError('Escribe tu correo para enviarte el enlace de recuperación.');
+          emailInput?.focus();
+          return;
+        }
+        if (isDemoMode || !supabase) {
+          if (status) status.textContent = 'En modo demo no se envían correos.';
+          return;
+        }
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/admin/recuperar`,
+        });
+        if (status) {
+          status.textContent = error
+            ? 'No pudimos enviar el correo. Intenta de nuevo.'
+            : 'Te enviamos un enlace para restablecer la contraseña.';
+        }
+      });
+
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorBox?.classList.add('hidden');
+        errorBox?.classList.remove('flex');
+
+        const email = emailInput?.value.trim() ?? '';
+        const password = passwordInput?.value ?? '';
+
+        if (!email || password.length < 6) {
+          showError('Escribe un correo válido y una contraseña de al menos 6 caracteres.');
+          return;
+        }
+
+        if (isDemoMode || !supabase) {
+          if (submit) submit.disabled = true;
+          if (status) status.textContent = 'Entrando al panel de demostración…';
+          window.setTimeout(() => window.location.assign(next), 350);
+          return;
+        }
+
+        if (submit) {
+          submit.disabled = true;
+          submit.textContent = 'Verificando…';
+        }
+
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+          showError('Correo o contraseña incorrectos. Revisa los datos e intenta de nuevo.');
+          if (submit) {
+            submit.disabled = false;
+            submit.textContent = 'Entrar al panel';
+          }
+          return;
+        }
+
+        const session = await getAdminSession();
+
+        if (!session) {
+          await supabase.auth.signOut();
+          showError(
+            'Esta cuenta no está autorizada para el panel. Pide a la propietaria que agregue tu correo al equipo.',
+          );
+          if (submit) {
+            submit.disabled = false;
+            submit.textContent = 'Entrar al panel';
+          }
+          return;
+        }
+
+        if (status) status.textContent = 'Bienvenida de nuevo.';
+        window.location.replace(next);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,85 @@
+---
+interface Props {
+  dark?: boolean;
+}
+
+const { dark = false } = Astro.props;
+---
+
+<form data-newsletter class="w-full max-w-md">
+  <div class="flex flex-col gap-2 sm:flex-row">
+    <label class="sr-only">
+      Correo electrónico
+      <input
+        type="email"
+        name="email"
+        required
+        autocomplete="email"
+        placeholder="tu@correo.com"
+        class:list={[
+          'w-full rounded-xs px-4 py-3.5 text-sm outline-none transition-colors duration-200',
+          dark
+            ? 'border border-cream-50/25 bg-cream-50/10 text-cream-50 placeholder:text-cream-50/45 focus:border-cream-50/70'
+            : 'border border-cream-300 bg-cream-50 text-ink placeholder:text-ink/40 focus:border-jade-700',
+        ]}
+      />
+    </label>
+    <button type="submit" class:list={[dark ? 'btn-cream' : 'btn-primary', 'shrink-0']}>
+      Recibir cartas
+    </button>
+  </div>
+  <p
+    data-newsletter-status
+    role="status"
+    aria-live="polite"
+    class:list={['mt-2 min-h-5 text-xs', dark ? 'text-cream-50/75' : 'text-ink/60']}
+  >
+  </p>
+  <p class:list={['mt-1 text-[0.68rem] leading-relaxed', dark ? 'text-cream-50/45' : 'text-ink/45']}>
+    Una carta al mes con rituales, lanzamientos y nada de spam.
+  </p>
+</form>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  document.querySelectorAll<HTMLFormElement>('[data-newsletter]').forEach((form) => {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const input = form.querySelector<HTMLInputElement>('input[name="email"]');
+      const status = form.querySelector<HTMLElement>('[data-newsletter-status]');
+      const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (!input || !status || !button) return;
+
+      if (!input.checkValidity()) {
+        status.textContent = 'Escribe un correo válido.';
+        input.focus();
+        return;
+      }
+
+      button.disabled = true;
+      status.textContent = 'Guardando…';
+
+      try {
+        if (supabase) {
+          const { error } = await supabase
+            .from('newsletter_subscribers')
+            .insert({ email: input.value.trim().toLowerCase(), source: 'web' });
+
+          // 23505 = correo ya registrado: no es un error para el usuario.
+          if (error && error.code !== '23505') throw error;
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        form.reset();
+        status.textContent = 'Gracias. Te escribiremos pronto.';
+      } catch {
+        status.textContent = 'No pudimos guardar tu correo. Intenta de nuevo.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+</script>

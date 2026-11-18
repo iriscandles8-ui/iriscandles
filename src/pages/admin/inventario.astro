@@ -1,0 +1,440 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import StatusBadge from '../../components/admin/StatusBadge.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import { formatCOP, formatCompactCOP, formatDateTime } from '../../lib/admin';
+import { demoProducts, demoMaterials, demoMovements } from '../../data/admin-demo';
+import { getMaterials, getMovements, getProducts } from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const products = supabase ? await getProducts(supabase) : demoProducts;
+const materials = supabase ? await getMaterials(supabase) : demoMaterials;
+const movements = supabase ? await getMovements(supabase) : demoMovements;
+
+const variants = products.flatMap((product) =>
+  product.variants.map((variant) => ({
+    ...variant,
+    product: product.name,
+    productId: product.id,
+  })),
+);
+
+const units = variants.reduce((sum, variant) => sum + variant.stock, 0);
+const saleValue = variants.reduce((sum, variant) => sum + variant.price * variant.stock, 0);
+const costValue = variants.reduce((sum, variant) => sum + variant.cost * variant.stock, 0);
+const lowMaterials = materials.filter((material) => material.stock < material.minStock);
+const lowVariants = variants.filter((variant) => variant.stock <= 5);
+
+const tabs = [
+  { id: 'productos', label: 'Producto terminado', count: variants.length },
+  { id: 'materias', label: 'Materias primas', count: materials.length },
+  { id: 'movimientos', label: 'Movimientos', count: movements.length },
+];
+
+const movementLabels: Record<string, { label: string; tone: 'jade' | 'terracotta' | 'amber' }> = {
+  in: { label: 'Entrada', tone: 'jade' },
+  out: { label: 'Salida', tone: 'terracotta' },
+  adjustment: { label: 'Ajuste', tone: 'amber' },
+};
+---
+
+<AdminLayout title="Inventario" section="Inventario">
+  <PageHeader
+    eyebrow="Catálogo"
+    title="Inventario"
+    description="Controla las existencias de velas terminadas y las materias primas del taller. Cada movimiento queda registrado."
+  >
+    <button type="button" slot="actions" class="admin-btn admin-btn-outline" data-export-inventory>
+      <AdminIcon name="download" size={14} />
+      Exportar
+    </button>
+    <button type="button" slot="actions" class="admin-btn admin-btn-primary" data-open-modal="movement-modal">
+      <AdminIcon name="refresh" size={14} />
+      Registrar movimiento
+    </button>
+  </PageHeader>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard label="Unidades terminadas" value={String(units)} icon="box" hint="listas para vender" />
+    <StatCard label="Valor a precio de venta" value={formatCompactCOP(saleValue)} icon="coins" hint={`costo: ${formatCompactCOP(costValue)}`} />
+    <StatCard label="Materias primas bajas" value={String(lowMaterials.length)} icon="alert" hint="bajo el mínimo" />
+    <StatCard label="Movimientos registrados" value={String(movements.length)} icon="refresh" hint="últimos 7 días" />
+  </section>
+
+  {
+    lowVariants.length > 0 && (
+      <div class="mt-4 flex flex-wrap items-start gap-3 border border-terracotta-600/25 bg-terracotta-600/[0.06] px-4 py-3">
+        <AdminIcon name="alert" size={16} class="mt-0.5 shrink-0 text-terracotta-700" />
+        <p class="flex-1 text-[0.75rem] leading-relaxed text-terracotta-800">
+          <strong class="font-semibold">Stock bajo:</strong>{' '}
+          {lowVariants.map((variant) => `${variant.product} ${variant.size}`).join(' · ')}.
+          Considera producir antes del próximo fin de semana.
+        </p>
+        <a href="#productos" class="admin-btn admin-btn-outline admin-btn-sm" data-goto-tab="productos">Revisar</a>
+      </div>
+    )
+  }
+
+  <section class="admin-card mt-5">
+    <div class="admin-tabs px-2">
+      {
+        tabs.map((tab) => (
+          <button
+            type="button"
+            class:list={['admin-tab', tab.id === 'productos' && 'is-active']}
+            data-tab={tab.id}
+          >
+            {tab.label}
+            <span class="ml-1 text-[0.62rem] text-ink/35">{tab.count}</span>
+          </button>
+        ))
+      }
+    </div>
+
+    <!-- Producto terminado -->
+    <div data-panel="productos">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>SKU</th>
+              <th>Existencias</th>
+              <th class="num">Costo unit.</th>
+              <th class="num">Valor</th>
+              <th>Estado</th>
+              <th class="text-right">Ajustar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              variants.map((variant) => {
+                const level = Math.min(Math.round((variant.stock / 25) * 100), 100);
+                const tone = variant.stock <= 5 ? 'danger' : variant.stock <= 10 ? 'warn' : 'ok';
+                return (
+                  <tr>
+                    <td>
+                      <p class="font-medium text-jade-900">{variant.product}</p>
+                      <p class="text-[0.66rem] text-ink/40">{variant.size}</p>
+                    </td>
+                    <td class="font-mono text-[0.68rem] text-ink/45">{variant.sku}</td>
+                    <td>
+                      <div class="flex items-center gap-3">
+                        <span class="w-14 font-display text-lg text-jade-900">{variant.stock} u.</span>
+                        <div class="admin-progress w-28" data-tone={tone === 'ok' ? undefined : tone}>
+                          <span style={`width:${level}%`}></span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="num text-ink/55">{formatCOP(variant.cost)}</td>
+                    <td class="num text-ink/70">{formatCOP(variant.cost * variant.stock)}</td>
+                    <td>
+                      {
+                        variant.stock <= 5 ? (
+                          <StatusBadge label="Reponer" tone="rose" />
+                        ) : variant.stock <= 10 ? (
+                          <StatusBadge label="Bajo" tone="amber" />
+                        ) : (
+                          <StatusBadge label="Disponible" tone="jade" />
+                        )
+                      }
+                    </td>
+                    <td class="text-right">
+                      <button
+                        type="button"
+                        class="admin-btn admin-btn-outline admin-btn-sm"
+                        data-adjust={variant.id}
+                        data-adjust-name={`${variant.product} · ${variant.size}`}
+                      >
+                        Ajustar
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Materias primas -->
+    <div data-panel="materias" hidden>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Materia prima</th>
+              <th>Unidad</th>
+              <th>Existencia</th>
+              <th>Cobertura</th>
+              <th class="num">Costo unit.</th>
+              <th>Proveedor</th>
+              <th>Estado</th>
+              <th class="text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              materials.map((material) => {
+                const ratio = material.stock / Math.max(material.minStock, 1);
+                const level = Math.min(Math.round(ratio * 100), 100);
+                const low = material.stock < material.minStock;
+                return (
+                  <tr>
+                    <td class="font-medium text-jade-900">{material.name}</td>
+                    <td class="text-ink/50">{material.unit}</td>
+                    <td class="text-ink/70">
+                      {material.stock.toLocaleString('es-CO')} {material.unit}
+                    </td>
+                    <td>
+                      <div class="flex items-center gap-2">
+                        <div class="admin-progress w-24" data-tone={low ? 'danger' : ratio < 1.5 ? 'warn' : undefined}>
+                          <span style={`width:${level}%`}></span>
+                        </div>
+                        <span class="text-[0.64rem] text-ink/40">mín. {material.minStock.toLocaleString('es-CO')}</span>
+                      </div>
+                    </td>
+                    <td class="num text-ink/55">{formatCOP(material.cost)}</td>
+                    <td class="text-[0.72rem] text-ink/50">{material.supplier}</td>
+                    <td>
+                      {low ? <StatusBadge label="Comprar" tone="rose" /> : <StatusBadge label="Suficiente" tone="jade" />}
+                    </td>
+                    <td class="text-right">
+                      <button
+                        type="button"
+                        class="admin-btn admin-btn-outline admin-btn-sm"
+                        data-adjust={material.id}
+                        data-adjust-name={material.name}
+                        data-adjust-type="material"
+                      >
+                        Reponer
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Movimientos -->
+    <div data-panel="movimientos" hidden>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Ítem</th>
+              <th class="num">Cantidad</th>
+              <th>Motivo</th>
+              <th>Responsable</th>
+            </tr>
+          </thead>
+          <tbody id="movements-body">
+            {
+              movements.map((movement) => {
+                const meta = movementLabels[movement.type];
+                return (
+                  <tr data-movement-row>
+                    <td class="whitespace-nowrap text-ink/55">{formatDateTime(movement.date)}</td>
+                    <td>
+                      <StatusBadge label={meta.label} tone={meta.tone} />
+                    </td>
+                    <td class="font-medium text-jade-900">{movement.item}</td>
+                    <td class:list={['num', movement.type === 'in' ? 'text-jade-700' : 'text-terracotta-700']}>
+                      {movement.quantity}
+                    </td>
+                    <td class="text-ink/55">{movement.reason}</td>
+                    <td class="text-ink/50">{movement.user}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-cream-300 px-4 py-3 text-[0.68rem] text-ink/45">
+      <span>Los movimientos se guardan en <code class="text-jade-900">stock_movements</code> con fecha y responsable.</span>
+      <span>Stock mínimo de seguridad: 5 unidades por variante.</span>
+    </div>
+  </section>
+
+  <!-- Modal movimiento -->
+  <div id="movement-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="movement-title">
+    <form id="movement-form" class="admin-modal-panel">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Inventario</p>
+          <h2 id="movement-title" class="admin-card-title mt-1">Registrar movimiento</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="movement-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+
+      <div class="admin-modal-body grid gap-4">
+        <div>
+          <span class="admin-label">Tipo de movimiento</span>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex cursor-pointer items-center justify-center gap-2 border border-cream-300 px-3 py-2 text-[0.75rem] has-[:checked]:border-jade-900 has-[:checked]:bg-jade-50">
+              <input type="radio" name="movement-type" value="in" checked class="accent-jade-900" />
+              Entrada
+            </label>
+            <label class="flex cursor-pointer items-center justify-center gap-2 border border-cream-300 px-3 py-2 text-[0.75rem] has-[:checked]:border-jade-900 has-[:checked]:bg-jade-50">
+              <input type="radio" name="movement-type" value="out" class="accent-jade-900" />
+              Salida
+            </label>
+            <label class="flex cursor-pointer items-center justify-center gap-2 border border-cream-300 px-3 py-2 text-[0.75rem] has-[:checked]:border-jade-900 has-[:checked]:bg-jade-50">
+              <input type="radio" name="movement-type" value="adjustment" class="accent-jade-900" />
+              Ajuste
+            </label>
+          </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="admin-label" for="movement-item">Ítem</label>
+            <select id="movement-item" name="item" class="admin-select" required>
+              <optgroup label="Producto terminado">
+                {
+                  variants.map((variant) => (
+                    <option value={`${variant.product} · ${variant.size}`}>
+                      {variant.product} · {variant.size}
+                    </option>
+                  ))
+                }
+              </optgroup>
+              <optgroup label="Materias primas">
+                {
+                  materials.map((material) => (
+                    <option value={material.name}>{material.name}</option>
+                  ))
+                }
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label class="admin-label" for="movement-quantity">Cantidad</label>
+            <input id="movement-quantity" name="quantity" type="number" min="1" required class="admin-input" placeholder="1" />
+          </div>
+        </div>
+
+        <div>
+          <label class="admin-label" for="movement-reason">Motivo</label>
+          <input id="movement-reason" name="reason" required class="admin-input" placeholder="Compra a proveedor, producción, pedido, merma…" />
+        </div>
+
+        <p class="admin-hint">
+          Las entradas suman al stock, las salidas restan y los ajustes corrigen el valor final. El
+          movimiento queda firmado con tu usuario.
+        </p>
+      </div>
+
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="movement-modal">Cancelar</button>
+        <button type="submit" class="admin-btn admin-btn-primary">Guardar movimiento</button>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script>
+  import { formatDateTime } from '../../lib/admin';
+
+  const tabs = document.querySelectorAll<HTMLButtonElement>('[data-tab]');
+  const panels = document.querySelectorAll<HTMLElement>('[data-panel]');
+  const form = document.getElementById('movement-form') as HTMLFormElement | null;
+  const itemSelect = document.getElementById('movement-item') as HTMLSelectElement | null;
+  const movementsBody = document.getElementById('movements-body');
+
+  function activateTab(id: string) {
+    tabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.tab === id));
+    panels.forEach((panel) => {
+      panel.hidden = panel.dataset.panel !== id;
+    });
+  }
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => activateTab(tab.dataset.tab ?? 'productos'));
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-goto-tab]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      activateTab(link.dataset.gotoTab ?? 'productos');
+      document.querySelector('.admin-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.closeModal;
+      if (id) (window as any).closeAdminModal(id);
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-adjust]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!itemSelect) return;
+      const name = button.dataset.adjustName ?? '';
+      const option = Array.from(itemSelect.options).find((item) => item.value === name);
+      if (option) itemSelect.value = option.value;
+      (window as any).openAdminModal('movement-modal');
+    });
+  });
+
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+
+    const data = new FormData(form);
+    const type = String(data.get('movement-type') ?? 'in') as 'in' | 'out' | 'adjustment';
+    const quantity = Math.max(Number(data.get('quantity')) || 1, 1);
+    const item = String(data.get('item') ?? '');
+    const reason = String(data.get('reason') ?? '');
+
+    const labels = { in: 'Entrada', out: 'Salida', adjustment: 'Ajuste' } as const;
+    const tones = { in: 'jade', out: 'terracotta', adjustment: 'amber' } as const;
+    const sign = type === 'in' ? '+' : type === 'out' ? '−' : '±';
+
+    if (movementsBody) {
+      const row = document.createElement('tr');
+      row.dataset.movementRow = '';
+      row.innerHTML = `
+        <td class="whitespace-nowrap text-ink/55">${formatDateTime(new Date().toISOString())}</td>
+        <td><span class="admin-badge" data-tone="${tones[type]}">${labels[type]}</span></td>
+        <td class="font-medium text-jade-900">${item.replace(/[<>&]/g, '')}</td>
+        <td class="num ${type === 'in' ? 'text-jade-700' : 'text-terracotta-700'}">${sign}${quantity}</td>
+        <td class="text-ink/55">${reason.replace(/[<>&]/g, '')}</td>
+        <td class="text-ink/50">Tú</td>`;
+      movementsBody.prepend(row);
+    }
+
+    form.reset();
+    (window as any).closeAdminModal('movement-modal');
+    (window as any).adminToast(`${labels[type]} de ${quantity} registrada (demo).`);
+    activateTab('movimientos');
+  });
+
+  document.querySelector('[data-export-inventory]')?.addEventListener('click', async () => {
+    const { downloadCsv } = await import('../../lib/admin');
+    downloadCsv('iris-inventario.csv', [
+      ['Producto', 'Tamaño', 'SKU', 'Stock', 'Costo unitario', 'Valor'],
+      ...Array.from(document.querySelectorAll<HTMLTableRowElement>('[data-panel="productos"] tbody tr')).map((row) =>
+        Array.from(row.querySelectorAll('td')).slice(0, 5).map((cell) => cell.textContent?.trim() ?? ''),
+      ),
+    ]);
+    (window as any).adminToast('Inventario exportado en CSV.');
+  });
+</script>

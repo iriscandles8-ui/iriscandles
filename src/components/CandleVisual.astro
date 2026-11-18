@@ -1,0 +1,78 @@
+---
+interface Props {
+  accent?: string;
+  soft?: string;
+  label?: string;
+  sublabel?: string;
+  class?: string;
+  size?: 'sm' | 'lg';
+}
+
+const {
+  accent = '#B85E37',
+  soft = '#F3E9D6',
+  label = 'Iris Candles',
+  sublabel = 'Hecho a mano',
+  class: className = '',
+  size = 'lg',
+} = Astro.props;
+---
+
+<div
+  class:list={['relative isolate overflow-hidden', className]}
+  style={`--accent:${accent};--soft:${soft}`}
+>
+  <div
+    class="absolute inset-0"
+    style="background:radial-gradient(120% 90% at 50% 20%, var(--soft) 0%, #FBF7EE 72%)"
+  >
+  </div>
+  <div class="texture-paper absolute inset-0 opacity-[0.05]"></div>
+  <div
+    class="absolute left-1/2 top-1/3 h-36 w-36 -translate-x-1/2 rounded-full blur-3xl sm:h-48 sm:w-48"
+    style="background:var(--accent);opacity:.16"
+  >
+  </div>
+
+  <div
+    class:list={[
+      'absolute bottom-[9%] left-1/2 -translate-x-1/2',
+      size === 'lg' ? 'w-[46%] min-w-[130px] max-w-[235px]' : 'w-[52%] min-w-[105px] max-w-[175px]',
+    ]}
+  >
+    <div
+      class="relative aspect-[4/5] rounded-[10px_10px_16px_16px] border border-white/70 bg-white/25 shadow-[0_30px_60px_-24px_rgba(6,75,59,0.45)]"
+    >
+      <div
+        class="absolute inset-x-[7%] bottom-[6%] top-[28%] rounded-[6px_6px_12px_12px]"
+        style="background:linear-gradient(180deg,#FBF7EE 0%,#F3E9D6 100%)"
+      >
+      </div>
+
+      <div
+        class="absolute inset-x-[12%] top-[40%] rounded-[2px] bg-cream-50/95 px-2 py-2 text-center shadow-sm"
+      >
+        <p class="font-display text-[clamp(8px,1vw,12px)] leading-tight tracking-[0.08em] text-jade-900">
+          {label}
+        </p>
+        <p class="mt-1 text-[7px] uppercase leading-tight tracking-[0.18em] text-terracotta-700">
+          {sublabel}
+        </p>
+      </div>
+
+      <div class="absolute left-1/2 top-[20%] h-2.5 w-px -translate-x-1/2 bg-jade-900/60"></div>
+      <div
+        class="flame absolute left-1/2 top-[13%] h-4 w-2 -translate-x-1/2 rounded-full"
+        style="background:radial-gradient(circle at 50% 70%, #FFE2B8 0%, var(--accent) 75%)"
+      >
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="absolute bottom-3 left-4 right-4 flex items-center justify-between text-[8px] uppercase tracking-[0.2em] text-jade-900/45"
+  >
+    <span>Iris Candles</span>
+    <span>Colombia</span>
+  </div>
+</div>

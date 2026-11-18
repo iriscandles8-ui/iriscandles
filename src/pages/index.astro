@@ -1,0 +1,227 @@
+---
+import Base from '../layouts/Base.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import ProductCard from '../components/ProductCard.astro';
+import CandleVisual from '../components/CandleVisual.astro';
+import NewsletterForm from '../components/NewsletterForm.astro';
+import { collections } from '../data/collections';
+
+const ritual = [
+  {
+    number: '01',
+    title: 'Enciende',
+    text: 'Recorta la mecha a 5 mm antes de cada uso. La primera encendida, deja que la cera se derrita hasta el borde.',
+  },
+  {
+    number: '02',
+    title: 'Respira',
+    text: 'Espera unos minutos a que el aroma se abra. Las notas de salida aparecen primero; el fondo llega después.',
+  },
+  {
+    number: '03',
+    title: 'Habita',
+    text: 'Apaga con el tapón, nunca con agua. Deja que la vela se enfríe y guarda el momento para la próxima vez.',
+  },
+];
+---
+
+<Base>
+  <!-- Hero -->
+  <section class="relative overflow-hidden">
+    <div class="texture-paper pointer-events-none absolute inset-0 opacity-[0.04]"></div>
+
+    <div class="container-iris grid items-center gap-14 py-16 lg:grid-cols-12 lg:py-24">
+      <div class="lg:col-span-7" data-reveal>
+        <p class="eyebrow flex items-center gap-3 text-terracotta-700">
+          <span class="h-px w-8 bg-terracotta-600"></span>
+          Velas artesanales · Colombia
+        </p>
+
+        <h1
+          class="mt-6 font-display text-[clamp(2.6rem,6vw,4.6rem)] leading-[1.04] tracking-[0.01em] text-jade-900"
+        >
+          Luz que se queda<br class="hidden sm:block" />
+          en la memoria.
+        </h1>
+
+        <p class="mt-6 max-w-xl text-lg leading-relaxed text-ink/75">
+          Cuatro paisajes olfativos vertidos a mano en pequeños lotes. Cera de soya, mecha de
+          algodón y el tiempo justo para que cada aroma se asiente.
+        </p>
+
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="#colecciones" class="btn-primary">Explorar colecciones</a>
+          <a href="/encuentra-tu-aroma" class="btn-outline">Encuentra tu aroma</a>
+        </div>
+
+        <ul
+          class="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-[0.68rem] uppercase tracking-[0.16em] text-jade-900/55"
+        >
+          <li>Envíos a toda Colombia</li>
+          <li>Nequi · Daviplata · Transferencia</li>
+          <li>Hecho a mano</li>
+        </ul>
+      </div>
+
+      <div class="lg:col-span-5" data-reveal>
+        <div class="relative mx-auto max-w-md">
+          <div class="absolute -inset-3 rounded-xs border border-terracotta-600/30"></div>
+          <CandleVisual
+            class="aspect-[4/5] rounded-xs"
+            accent="#B85E37"
+            soft="#F3E9D6"
+            label="Otoño Dorado"
+            sublabel="Manzana & Canela"
+          />
+          <div
+            class="absolute -bottom-5 -left-5 flex h-20 w-20 items-center justify-center rounded-full bg-jade-900 text-center text-[8px] uppercase leading-[1.5] tracking-[0.16em] text-cream-50 sm:h-24 sm:w-24 sm:text-[9px]"
+          >
+            Hecho<br />a mano<br />Colombia
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Franja de materiales -->
+  <div class="border-y border-cream-300 bg-cream-100/60">
+    <div
+      class="container-iris flex flex-wrap items-center justify-center gap-x-8 gap-y-2 py-4 text-[0.62rem] uppercase tracking-[0.2em] text-jade-900/65 sm:text-[0.68rem]"
+    >
+      <span>Cera de soya</span>
+      <span class="text-terracotta-600">·</span>
+      <span>Mecha de algodón</span>
+      <span class="text-terracotta-600">·</span>
+      <span>Fragancias sin ftalatos</span>
+      <span class="text-terracotta-600">·</span>
+      <span>Lotes pequeños</span>
+    </div>
+  </div>
+
+  <!-- Colecciones -->
+  <section id="colecciones" class="py-20 lg:py-28">
+    <div class="container-iris">
+      <div class="flex flex-wrap items-end justify-between gap-6">
+        <SectionHeading
+          eyebrow="Las colecciones"
+          title="Cuatro paisajes, un mismo ritual"
+          description="Cada colección nace de un recuerdo y se vierte en dos tamaños. Elige por aroma, por momento o por intuición."
+        />
+        <a href="/tienda" class="link-arrow">Ver toda la tienda</a>
+      </div>
+
+      <div class="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          collections.map((collection, index) => (
+            <div data-reveal style={`transition-delay:${index * 70}ms`}>
+              <ProductCard collection={collection} />
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Ritual -->
+  <section class="bg-jade-900 py-20 text-cream-50 lg:py-28">
+    <div class="container-iris grid gap-12 lg:grid-cols-12">
+      <div class="lg:col-span-4">
+        <p class="eyebrow text-blush-200">El ritual</p>
+        <h2 class="mt-3 font-display text-3xl leading-tight text-cream-50 sm:text-4xl">
+          Tres gestos para habitarla
+        </h2>
+        <p class="mt-4 max-w-sm text-sm leading-relaxed text-cream-50/65">
+          Una vela no se consume: se acompaña. Estos son los gestos que hacen que dure más y
+          huela mejor.
+        </p>
+      </div>
+
+      <ol class="grid gap-10 sm:grid-cols-3 lg:col-span-8">
+        {
+          ritual.map((step) => (
+            <li class="border-t border-cream-50/20 pt-6">
+              <span class="font-display text-sm tracking-[0.2em] text-blush-200">{step.number}</span>
+              <h3 class="mt-3 font-display text-xl text-cream-50">{step.title}</h3>
+              <p class="mt-2 text-sm leading-relaxed text-cream-50/65">{step.text}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <!-- Quiz -->
+  <section class="py-20 lg:py-28">
+    <div class="container-iris">
+      <div
+        class="grid items-center gap-10 border border-cream-300 bg-cream-100/50 p-8 sm:p-12 lg:grid-cols-2 lg:p-16"
+        data-reveal
+      >
+        <div>
+          <p class="eyebrow text-terracotta-700">Encuentra tu aroma</p>
+          <h2 class="mt-3 font-display text-3xl leading-tight text-jade-900 sm:text-4xl">
+            ¿No sabes cuál elegir?
+          </h2>
+          <p class="mt-4 max-w-md text-base leading-relaxed text-ink/70">
+            Responde tres preguntas sobre tu momento, tu familia olfativa y la intensidad que
+            buscas. Te recomendamos la colección que mejor te acompaña.
+          </p>
+          <a href="/encuentra-tu-aroma" class="btn-primary mt-7">Hacer el test</a>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          {
+            collections.map((collection) => (
+              <div
+                class="flex aspect-square flex-col justify-between border border-cream-300 p-4"
+                style={`background:${collection.theme.soft}`}
+              >
+                <span class="text-[0.6rem] uppercase tracking-[0.18em] text-jade-900/45">
+                  {collection.number}
+                </span>
+                <div>
+                  <p class="font-display text-sm leading-tight text-jade-900">{collection.name}</p>
+                  <p class="mt-1 text-[0.65rem] text-ink/60">{collection.aroma}</p>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Eventos -->
+  <section class="border-y border-cream-300 bg-cream-100/40 py-16">
+    <div
+      class="container-iris flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between"
+      data-reveal
+    >
+      <div class="max-w-2xl">
+        <p class="eyebrow text-terracotta-700">Eventos y empresas</p>
+        <h2 class="mt-3 font-display text-2xl leading-tight text-jade-900 sm:text-3xl">
+          Velas para celebraciones y regalos corporativos
+        </h2>
+        <p class="mt-3 text-sm leading-relaxed text-ink/70">
+          Pedidos desde 15 unidades, con etiqueta y empaque personalizados. Bodas, cumpleaños,
+          hoteles y regalos de fin de año.
+        </p>
+      </div>
+      <a href="/eventos" class="btn-outline shrink-0">Cotizar un evento</a>
+    </div>
+  </section>
+
+  <!-- Newsletter -->
+  <section class="py-20 lg:py-28">
+    <div class="container-iris grid items-center gap-10 lg:grid-cols-2">
+      <SectionHeading
+        eyebrow="Cartas de Iris"
+        title="Un ritual en tu correo"
+        description="Una carta al mes con ideas para encender, lanzamientos y pequeñas historias del taller. Sin ruido."
+      />
+      <div class="lg:justify-self-end">
+        <NewsletterForm />
+      </div>
+    </div>
+  </section>
+</Base>

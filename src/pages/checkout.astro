@@ -1,0 +1,643 @@
+---
+import Base from '../layouts/Base.astro';
+import { DEPARTMENTS } from '../data/departments';
+import { PAYMENT_METHODS } from '../data/payment';
+import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
+
+const departments = [...DEPARTMENTS];
+const paymentMethods = PAYMENT_METHODS;
+---
+
+<Base
+  title="Pago · Iris Candles"
+  description="Completa tus datos de entrega y elige cómo pagar tus velas Iris Candles."
+  noindex
+>
+  <section class="py-10 lg:py-14">
+    <div class="container-iris">
+      <nav aria-label="Ruta de navegación" class="text-[0.68rem] uppercase tracking-[0.14em] text-jade-900/75">
+        <a href="/" class="hover:text-jade-900">Inicio</a>
+        <span class="mx-2">/</span>
+        <a href="/carrito" class="hover:text-jade-900">Carrito</a>
+        <span class="mx-2">/</span>
+        <span class="text-jade-900/85">Pago</span>
+      </nav>
+
+      <div class="mt-6 border-b border-cream-300 pb-6">
+        <p class="eyebrow text-terracotta-700">Paso 2 de 2</p>
+        <h1 class="mt-3 font-display text-3xl leading-tight text-jade-900 sm:text-4xl">
+          Finalizar compra
+        </h1>
+        <p class="mt-3 max-w-xl text-sm leading-relaxed text-ink/75">
+          Registramos tu pedido y coordinamos el pago contigo por WhatsApp o correo.
+          Todavía no hacemos cobros automáticos en línea.
+        </p>
+      </div>
+
+      <div data-checkout-loading class="mt-8 grid gap-10 lg:grid-cols-[1.5fr_1fr]">
+        <div class="space-y-6" aria-hidden="true">
+          <div class="h-40 animate-pulse border border-cream-300 bg-cream-100/40"></div>
+          <div class="h-56 animate-pulse border border-cream-300 bg-cream-100/40"></div>
+        </div>
+        <div class="h-72 animate-pulse border border-cream-300 bg-cream-100/40" aria-hidden="true"></div>
+        <p class="sr-only" role="status">Cargando el resumen del pedido…</p>
+      </div>
+
+      <div data-checkout-empty hidden class="py-16 text-center">
+        <h2 class="font-display text-2xl text-jade-900">No hay productos para pagar</h2>
+        <p class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink/75">
+          Tu carrito está vacío. Elige una colección y vuelve cuando tengas tus velas.
+        </p>
+        <div class="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+          <a href="/tienda" class="btn-primary">Ver la tienda</a>
+          <a href="/carrito" class="btn-outline">Ir al carrito</a>
+        </div>
+      </div>
+
+      <form data-checkout-form hidden novalidate class="mt-8">
+        <div class="grid gap-10 lg:grid-cols-[1.5fr_1fr] lg:gap-14">
+          <div class="space-y-9">
+            <!-- Contacto -->
+            <fieldset>
+              <legend class="flex items-baseline gap-3">
+                <span class="grid h-7 w-7 place-items-center rounded-full bg-jade-900 text-[0.7rem] font-medium text-cream-50">1</span>
+                <span class="font-display text-xl text-jade-900">Contacto</span>
+              </legend>
+              <p class="mt-1 pl-10 text-[0.7rem] text-ink/70">
+                Te escribimos a este correo para confirmar el pedido.
+              </p>
+
+              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                  <label class="field-label" for="checkout-email">Correo electrónico</label>
+                  <input
+                    id="checkout-email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    required
+                    placeholder="tu@correo.com"
+                    class="field"
+                  />
+                </div>
+                <div>
+                  <label class="field-label" for="checkout-phone">Teléfono / WhatsApp</label>
+                  <input
+                    id="checkout-phone"
+                    name="phone"
+                    type="tel"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    required
+                    placeholder="300 000 0000"
+                    class="field"
+                  />
+                </div>
+                <div>
+                  <label class="field-label" for="checkout-name">Nombre completo</label>
+                  <input
+                    id="checkout-name"
+                    name="name"
+                    type="text"
+                    autocomplete="name"
+                    required
+                    placeholder="Nombre y apellido"
+                    class="field"
+                  />
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Entrega -->
+            <fieldset>
+              <legend class="flex items-baseline gap-3">
+                <span class="grid h-7 w-7 place-items-center rounded-full bg-jade-900 text-[0.7rem] font-medium text-cream-50">2</span>
+                <span class="font-display text-xl text-jade-900">Entrega</span>
+              </legend>
+              <p class="mt-1 pl-10 text-[0.7rem] text-ink/70">
+                Enviamos a toda Colombia con {shipping.carrier}.
+              </p>
+
+              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                  <label class="field-label" for="checkout-address">Dirección</label>
+                  <input
+                    id="checkout-address"
+                    name="address"
+                    type="text"
+                    autocomplete="street-address"
+                    required
+                    placeholder="Calle 00 #00-00"
+                    class="field"
+                  />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="field-label" for="checkout-notes-address">
+                    Apartamento, torre o indicaciones <span class="normal-case tracking-normal text-ink/70">(opcional)</span>
+                  </label>
+                  <input
+                    id="checkout-notes-address"
+                    name="addressNotes"
+                    type="text"
+                    placeholder="Apto 302 · portería con cita"
+                    class="field"
+                  />
+                </div>
+                <div>
+                  <label class="field-label" for="checkout-department">Departamento</label>
+                  <select id="checkout-department" name="department" required class="field">
+                    <option value="" disabled selected>Selecciona</option>
+                    {departments.map((department) => <option value={department}>{department}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label" for="checkout-city">Ciudad o municipio</label>
+                  <input
+                    id="checkout-city"
+                    name="city"
+                    type="text"
+                    autocomplete="address-level2"
+                    required
+                    placeholder="Bogotá"
+                    class="field"
+                  />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="field-label" for="checkout-notes">
+                    Notas del pedido <span class="normal-case tracking-normal text-ink/70">(opcional)</span>
+                  </label>
+                  <textarea
+                    id="checkout-notes"
+                    name="notes"
+                    rows="3"
+                    placeholder="¿Es un regalo? ¿Necesitas factura electrónica? Cuéntanos."
+                    class="field resize-none"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="mt-5 flex items-start justify-between gap-4 border border-jade-900/20 bg-jade-50/50 px-4 py-3.5">
+                <div>
+                  <p class="text-[0.8rem] font-medium text-jade-900">Envío estándar · {shipping.carrier}</p>
+                  <p class="mt-0.5 text-[0.7rem] text-ink/70">
+                    {shipping.etaLabel} después de confirmar el pago
+                  </p>
+                </div>
+                <p class="shrink-0 text-[0.8rem] font-medium text-jade-900" data-shipping-cost>—</p>
+              </div>
+            </fieldset>
+
+            <!-- Pago -->
+            <fieldset>
+              <legend class="flex items-baseline gap-3">
+                <span class="grid h-7 w-7 place-items-center rounded-full bg-jade-900 text-[0.7rem] font-medium text-cream-50">3</span>
+                <span class="font-display text-xl text-jade-900">Pago</span>
+              </legend>
+              <p class="mt-1 pl-10 text-[0.7rem] text-ink/70">
+                Elige tu forma de pago preferida. No se hace ningún cobro en línea: al recibir
+                el pedido te escribimos para confirmar el pago y la entrega.
+              </p>
+
+              <div class="mt-5 grid gap-2 sm:grid-cols-2">
+                {
+                  paymentMethods.map((method, index) => (
+                    <label class="flex cursor-pointer items-center gap-3 border border-cream-300 bg-cream-50 px-4 py-3 transition-colors has-[:checked]:border-jade-900 has-[:checked]:bg-jade-50">
+                      <input
+                        type="radio"
+                        name="payment"
+                        value={method.label}
+                        checked={index === 0}
+                        class="h-3.5 w-3.5 accent-jade-900"
+                      />
+                      <span class="flex-1">
+                        <span class="block text-[0.82rem] font-medium text-jade-900">{method.label}</span>
+                        <span class="block text-[0.66rem] text-ink/70">{method.hint}</span>
+                      </span>
+                    </label>
+                  ))
+                }
+              </div>
+
+              <div class="mt-5 flex items-start gap-2.5 border border-jade-900/20 bg-jade-50/60 px-4 py-3">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" class="mt-0.5 shrink-0 text-jade-800">
+                  <path d="M12 3 4.5 6v5.5c0 4.3 3 7.9 7.5 9.5 4.5-1.6 7.5-5.2 7.5-9.5V6L12 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+                  <path d="m8.5 12.5 2.2 2.2 4.8-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <p class="text-[0.7rem] leading-relaxed text-jade-900/85">
+                  <strong class="font-semibold text-jade-900">Pago coordinado contigo.</strong>
+                  Al enviar el pedido no se hace ningún cobro. Te escribimos por WhatsApp o correo
+                  para confirmar el medio de pago y la entrega.
+                </p>
+              </div>
+
+              {
+                pricesAreProvisional && (
+                  <p class="mt-2 text-[0.66rem] leading-relaxed text-ink/70">
+                    Los precios son de referencia y pueden ajustarse antes de confirmar el pago.
+                  </p>
+                )
+              }
+            </fieldset>
+          </div>
+
+          <!-- Resumen -->
+          <aside class="lg:sticky lg:top-28 lg:self-start">
+            <div class="border border-cream-300 bg-cream-100/40 p-5 sm:p-6">
+              <div class="flex items-baseline justify-between gap-3">
+                <h2 class="font-display text-xl text-jade-900">Tu pedido</h2>
+                <a href="/carrito" class="text-[0.66rem] text-ink/70 underline underline-offset-2 hover:text-terracotta-700">
+                  Editar
+                </a>
+              </div>
+
+              <ul class="mt-4 divide-y divide-cream-300" data-summary-lines></ul>
+
+              <dl class="mt-4 space-y-2.5 border-t border-cream-300 pt-4 text-sm">
+                <div class="flex items-baseline justify-between gap-4">
+                  <dt class="text-ink/75">Subtotal</dt>
+                  <dd class="text-jade-900" data-summary-subtotal>—</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4">
+                  <dt class="text-ink/75">Envío</dt>
+                  <dd class="text-jade-900" data-summary-shipping>—</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-t border-cream-300 pt-2.5">
+                  <dt class="font-medium text-jade-900">Total</dt>
+                  <dd class="font-display text-xl text-jade-900" data-summary-total>—</dd>
+                </div>
+              </dl>
+
+              <button type="submit" class="btn-primary mt-5 w-full" data-submit>
+                Enviar pedido
+              </button>
+
+              <p
+                data-form-error
+                hidden
+                role="alert"
+                class="mt-3 border border-terracotta-300 bg-cream-100 px-3 py-2.5 text-left text-[0.7rem] leading-relaxed text-terracotta-800"
+              ></p>
+
+              <p class="mt-3 text-center text-[0.64rem] leading-relaxed text-ink/70">
+                Al continuar aceptas los
+                <a href="/legales#terminos" class="underline underline-offset-2 hover:text-jade-900">términos</a>
+                y la
+                <a href="/legales#privacidad" class="underline underline-offset-2 hover:text-jade-900">política de privacidad</a>.
+              </p>
+
+              <ul class="mt-5 space-y-2 border-t border-cream-300 pt-4 text-[0.68rem] text-ink/70">
+                <li class="flex items-start gap-2">
+                  <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-terracotta-600"></span>
+                  Envío gratis desde {formatCOP(shipping.freeFromCop)}
+                </li>
+                <li class="flex items-start gap-2">
+                  <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-terracotta-600"></span>
+                  Cambios y reemplazos dentro de los 5 días
+                </li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </form>
+
+      <!-- Pedido generado -->
+      <div data-checkout-done hidden class="mx-auto max-w-2xl py-12 text-center sm:py-16">
+        <span class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-jade-50 text-jade-800">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+        <h2 class="mt-5 font-display text-3xl text-jade-900" data-done-title>Pedido recibido</h2>
+        <p class="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-ink/75">
+          <span data-done-lead>Guardamos tu pedido</span>
+          <strong class="font-medium text-jade-900" data-order-number></strong>.
+        </p>
+        <p class="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-ink/75" data-done-message>
+          Te escribimos por WhatsApp o correo para coordinar el pago y la entrega. Aún no se ha
+          realizado ningún cobro.
+        </p>
+
+        <div class="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+          <a data-order-whatsapp href="#" target="_blank" rel="noopener noreferrer" class="btn-primary">
+            Escribir por WhatsApp
+          </a>
+          <a data-order-mailto href="#" class="btn-outline">
+            Enviar copia por correo
+          </a>
+        </div>
+
+        <div class="mt-8 border border-cream-300 bg-cream-100/40 p-5 text-left">
+          <p class="text-[0.6rem] uppercase tracking-[0.16em] text-jade-900/75">Resumen del pedido</p>
+          <pre data-order-text class="mt-3 whitespace-pre-wrap font-sans text-[0.74rem] leading-relaxed text-ink/70"></pre>
+        </div>
+
+        <p class="mt-5 text-[0.66rem] leading-relaxed text-ink/70" data-done-footnote>
+          Conserva tu número de pedido para cualquier consulta. Si necesitas ajustar algo,
+          escríbenos por WhatsApp.
+        </p>
+
+        <p class="mt-2">
+          <a href="/tienda" class="text-[0.7rem] text-ink/70 underline underline-offset-2 hover:text-jade-900">
+            Seguir comprando
+          </a>
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { clearCart, getLines, getTotals, onCartChange } from '../lib/cart';
+  import { formatCOP } from '../data/pricing';
+  import { socialLinks } from '../data/social';
+
+  const loading = document.querySelector<HTMLElement>('[data-checkout-loading]');
+  const empty = document.querySelector<HTMLElement>('[data-checkout-empty]');
+  const form = document.querySelector<HTMLFormElement>('[data-checkout-form]');
+  const done = document.querySelector<HTMLElement>('[data-checkout-done]');
+  const summaryLines = document.querySelector<HTMLElement>('[data-summary-lines]');
+  const summarySubtotal = document.querySelector<HTMLElement>('[data-summary-subtotal]');
+  const summaryShipping = document.querySelector<HTMLElement>('[data-summary-shipping]');
+  const summaryTotal = document.querySelector<HTMLElement>('[data-summary-total]');
+  const shippingCost = document.querySelector<HTMLElement>('[data-shipping-cost]');
+  const orderText = document.querySelector<HTMLElement>('[data-order-text]');
+  const orderMailto = document.querySelector<HTMLAnchorElement>('[data-order-mailto]');
+  const orderWhatsapp = document.querySelector<HTMLAnchorElement>('[data-order-whatsapp]');
+  const orderNumber = document.querySelector<HTMLElement>('[data-order-number]');
+  const doneTitle = document.querySelector<HTMLElement>('[data-done-title]');
+  const doneLead = document.querySelector<HTMLElement>('[data-done-lead]');
+  const doneMessage = document.querySelector<HTMLElement>('[data-done-message]');
+  const doneFootnote = document.querySelector<HTMLElement>('[data-done-footnote]');
+  const formError = document.querySelector<HTMLElement>('[data-form-error]');
+  const submitButton = document.querySelector<HTMLButtonElement>('[data-submit]');
+
+  const DRAFT_KEY = 'iris.checkout.v1';
+  const OWNER_EMAIL = 'hola@iriscandles.com';
+
+  let orderCompleted = false;
+
+  function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (char) => {
+      const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return map[char] ?? char;
+    });
+  }
+
+  function renderSummary() {
+    const lines = getLines();
+    const totals = getTotals(lines);
+
+    if (loading) loading.hidden = true;
+
+    const isEmpty = lines.length === 0;
+    if (empty) empty.hidden = orderCompleted || !isEmpty;
+    if (form) form.hidden = orderCompleted || isEmpty;
+
+    if (summaryLines) {
+      summaryLines.innerHTML = lines
+        .map(
+          (line) => `
+            <li class="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+              <div class="min-w-0">
+                <p class="text-[0.76rem] font-medium text-jade-900">${escapeHtml(line.collectionName)}</p>
+                <p class="text-[0.66rem] text-ink/70">${escapeHtml(line.size.label)} · ${line.qty} ${line.qty === 1 ? 'unidad' : 'unidades'}</p>
+              </div>
+              <p class="shrink-0 text-[0.74rem] text-jade-900">${formatCOP(line.lineTotalCop)}</p>
+            </li>`,
+        )
+        .join('');
+    }
+
+    if (summarySubtotal) summarySubtotal.textContent = formatCOP(totals.subtotalCop);
+    if (summaryShipping) summaryShipping.textContent = totals.isFreeShipping ? 'Gratis' : formatCOP(totals.shippingCop);
+    if (summaryTotal) summaryTotal.textContent = formatCOP(totals.totalCop);
+    if (shippingCost) shippingCost.textContent = totals.isFreeShipping ? 'Gratis' : formatCOP(totals.shippingCop);
+  }
+
+  /* --------------------------- Borrador del formulario --------------------------- */
+
+  function saveDraft() {
+    if (!form) return;
+    const data: Record<string, string> = {};
+    new FormData(form).forEach((value, key) => {
+      if (typeof value === 'string' && key !== 'payment') data[key] = value;
+    });
+    const payment = form.querySelector<HTMLInputElement>('input[name="payment"]:checked')?.value;
+    if (payment) data.payment = payment;
+    try {
+      window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+    } catch {
+      /* sin almacenamiento: el borrador vive solo en esta página */
+    }
+  }
+
+  function restoreDraft() {
+    if (!form) return;
+    try {
+      const raw = window.sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw) as Record<string, string>;
+      Object.entries(data).forEach(([key, value]) => {
+        const field = form.elements.namedItem(key);
+        if (field instanceof RadioNodeList) {
+          const radio = Array.from(field).find(
+            (item): item is HTMLInputElement => item instanceof HTMLInputElement && item.value === value,
+          );
+          if (radio) radio.checked = true;
+        } else if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+          field.value = value;
+        }
+      });
+    } catch {
+      /* borrador ilegible: se ignora */
+    }
+  }
+
+  form?.addEventListener('input', saveDraft);
+  form?.addEventListener('change', saveDraft);
+  form?.addEventListener('input', (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.name === 'phone') target.setCustomValidity('');
+  });
+  restoreDraft();
+
+  /* ------------------------------ Envío del pedido ------------------------------ */
+
+  function fieldValue(name: string): string {
+    if (!form) return '';
+    const field = form.elements.namedItem(name);
+    if (field instanceof RadioNodeList) return field.value;
+    if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+      return field.value.trim();
+    }
+    return '';
+  }
+
+  function buildOrderText(reference?: string): string {
+    const lines = getLines();
+    const totals = getTotals(lines);
+    const rows = lines.map(
+      (line) => `${line.qty} × ${line.collectionName} ${line.size.label} — ${formatCOP(line.lineTotalCop)}`,
+    );
+    const notes = fieldValue('notes');
+
+    return [
+      reference ? `Pedido ${reference} · Iris Candles` : 'Pedido · Iris Candles',
+      reference ? 'Estado del pago: en proceso de pago (confirmación manual)' : '',
+      '',
+      `Cliente: ${fieldValue('name')}`,
+      `Correo: ${fieldValue('email')}`,
+      `Teléfono: ${fieldValue('phone')}`,
+      '',
+      'Entrega',
+      `${fieldValue('address')} ${fieldValue('addressNotes')}`.trim(),
+      `${fieldValue('city')}, ${fieldValue('department')}`,
+      '',
+      'Productos',
+      ...rows,
+      '',
+      `Subtotal: ${formatCOP(totals.subtotalCop)}`,
+      `Envío: ${totals.isFreeShipping ? 'Gratis' : formatCOP(totals.shippingCop)}`,
+      `Total: ${formatCOP(totals.totalCop)}`,
+      '',
+      `Medio de pago preferido: ${fieldValue('payment') || 'Por definir'}`,
+      'Pago: pendiente de confirmar. No se ha realizado ningún cobro.',
+      ...(notes ? ['', `Notas: ${notes}`] : []),
+    ]
+      .filter((line, index, array) => line !== '' || array[index - 1] !== '')
+      .join('\n');
+  }
+
+  function setBusy(busy: boolean) {
+    if (!submitButton) return;
+    submitButton.disabled = busy;
+    submitButton.textContent = busy ? 'Enviando pedido…' : 'Enviar pedido';
+  }
+
+  function showError(message: string) {
+    if (!formError) return;
+    formError.textContent = message;
+    formError.hidden = false;
+  }
+
+  function hideError() {
+    if (formError) formError.hidden = true;
+  }
+
+  function showDone(reference: string | null, fallback: boolean) {
+    const text = buildOrderText(reference ?? undefined);
+    const subject = `Pedido Iris Candles${reference ? ` ${reference}` : ''} · ${fieldValue('name')}`;
+    const whatsappMessage = reference
+      ? `Hola Iris Candles, acabo de hacer el pedido ${reference}. Quiero coordinar el pago y la entrega.`
+      : `Hola Iris Candles, quiero confirmar este pedido:\n\n${text}`;
+
+    if (orderText) orderText.textContent = text;
+    if (orderNumber) orderNumber.textContent = reference ? `#${reference}` : '';
+    if (doneTitle) doneTitle.textContent = fallback ? 'Pedido listo para enviar' : 'Pedido recibido';
+    if (doneLead) doneLead.textContent = fallback ? 'Generamos el resumen de tu pedido' : 'Guardamos tu pedido';
+    if (doneMessage) {
+      doneMessage.textContent = fallback
+        ? 'No pudimos registrarlo automáticamente. Envíanos el resumen por WhatsApp o correo y lo confirmamos contigo.'
+        : 'Te escribimos por WhatsApp o correo para coordinar el pago y la entrega. Aún no se ha realizado ningún cobro.';
+    }
+    if (doneFootnote) {
+      doneFootnote.textContent = fallback
+        ? 'Tu carrito sigue guardado por si quieres ajustar algo antes de escribirnos.'
+        : 'Conserva tu número de pedido para cualquier consulta. Si necesitas ajustar algo, escríbenos por WhatsApp.';
+    }
+
+    if (orderMailto) {
+      orderMailto.href = `mailto:${OWNER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+    }
+
+    const whatsapp = socialLinks.find((link) => link.key === 'whatsapp');
+    if (orderWhatsapp && whatsapp) {
+      orderWhatsapp.href = `${whatsapp.href}?text=${encodeURIComponent(whatsappMessage)}`;
+    }
+
+    if (form) form.hidden = true;
+    if (done) {
+      done.hidden = false;
+      done.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!form || submitButton?.disabled) return;
+    hideError();
+
+    const phoneField = form.elements.namedItem('phone');
+    if (phoneField instanceof HTMLInputElement) {
+      const digits = phoneField.value.replace(/\D/g, '');
+      phoneField.setCustomValidity(
+        digits.length >= 7 && digits.length <= 15
+          ? ''
+          : 'Escribe un teléfono de 7 a 15 dígitos para poder contactarte.',
+      );
+    }
+
+    if (!form.reportValidity()) return;
+
+    const lines = getLines();
+    if (lines.length === 0) return;
+
+    const payload = {
+      customer: {
+        name: fieldValue('name'),
+        email: fieldValue('email'),
+        phone: fieldValue('phone'),
+      },
+      shipping: {
+        address: fieldValue('address'),
+        addressNotes: fieldValue('addressNotes'),
+        department: fieldValue('department'),
+        city: fieldValue('city'),
+      },
+      notes: fieldValue('notes'),
+      payment: fieldValue('payment'),
+      items: lines.map((line) => ({ sku: line.sku, qty: line.qty })),
+    };
+
+    setBusy(true);
+
+    try {
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await response.json().catch(() => ({}))) as {
+        orderNumber?: string;
+        error?: string;
+      };
+
+      if (response.ok && data.orderNumber) {
+        orderCompleted = true;
+        try {
+          window.sessionStorage.removeItem(DRAFT_KEY);
+        } catch {
+          /* sin almacenamiento */
+        }
+        clearCart();
+        showDone(data.orderNumber, false);
+        return;
+      }
+
+      if (response.status === 400) {
+        showError(data.error || 'Revisa los datos e inténtalo de nuevo.');
+        return;
+      }
+
+      showDone(null, true);
+    } catch {
+      showDone(null, true);
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  onCartChange(renderSummary);
+  renderSummary();
+</script>

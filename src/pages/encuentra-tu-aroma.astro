@@ -1,0 +1,204 @@
+---
+import Base from '../layouts/Base.astro';
+import { collections } from '../data/collections';
+
+const quizData = collections.map((collection) => ({
+  slug: collection.slug,
+  name: collection.name,
+  aroma: collection.aroma,
+  tagline: collection.tagline,
+  accent: collection.theme.accent,
+  soft: collection.theme.soft,
+}));
+---
+
+<Base
+  title="Encuentra tu aroma · Iris Candles"
+  description="Responde tres preguntas y descubre qué colección de Iris Candles acompaña mejor tu momento."
+>
+  <section class="py-14 lg:py-20">
+    <div class="container-iris max-w-3xl">
+      <p class="eyebrow text-terracotta-700">Encuentra tu aroma</p>
+      <h1 class="mt-4 font-display text-4xl leading-tight text-jade-900 sm:text-5xl">
+        Tres preguntas, una vela
+      </h1>
+      <p class="mt-4 max-w-xl text-base leading-relaxed text-ink/70">
+        No hay respuestas correctas. Solo tu momento, lo que te gusta oler y cuánto quieres
+        que el aroma ocupe la casa.
+      </p>
+
+      <div id="quiz" class="mt-10 border border-cream-300 bg-cream-50 p-6 sm:p-10">
+        <div class="flex items-center justify-between text-[0.68rem] uppercase tracking-[0.16em] text-jade-900/50">
+          <span>Paso <span data-step>1</span> de 3</span>
+          <span data-progress-label>33%</span>
+        </div>
+        <div class="mt-3 h-1 w-full bg-cream-200">
+          <div data-progress class="h-1 bg-terracotta-600 transition-all duration-500" style="width:33%"></div>
+        </div>
+
+        <div data-question="1" class="mt-8">
+          <h2 class="font-display text-2xl text-jade-900">¿Qué momento quieres acompañar?</h2>
+          <div class="mt-6 grid gap-3">
+            <button type="button" class="quiz-option" data-next="2" data-scores='{"loto-esmeralda":2,"luz-serena":1}'>
+              Una mañana lenta y fresca
+            </button>
+            <button type="button" class="quiz-option" data-next="2" data-scores='{"otono-dorado":2,"esencia-del-valle":1}'>
+              Una tarde cálida en casa
+            </button>
+            <button type="button" class="quiz-option" data-next="2" data-scores='{"luz-serena":2,"loto-esmeralda":1}'>
+              La noche, antes de dormir
+            </button>
+            <button type="button" class="quiz-option" data-next="2" data-scores='{"esencia-del-valle":2,"otono-dorado":1}'>
+              Una reunión dulce con amigos
+            </button>
+          </div>
+        </div>
+
+        <div data-question="2" class="mt-8 hidden">
+          <h2 class="font-display text-2xl text-jade-900">¿Qué familia olfativa te atrae más?</h2>
+          <div class="mt-6 grid gap-3">
+            <button type="button" class="quiz-option" data-next="3" data-scores='{"otono-dorado":3}'>
+              Especiada y cálida
+            </button>
+            <button type="button" class="quiz-option" data-next="3" data-scores='{"esencia-del-valle":3}'>
+              Frutal y tropical
+            </button>
+            <button type="button" class="quiz-option" data-next="3" data-scores='{"loto-esmeralda":3}'>
+              Floral y limpia
+            </button>
+            <button type="button" class="quiz-option" data-next="3" data-scores='{"luz-serena":3}'>
+              Dulce y cremosa
+            </button>
+          </div>
+        </div>
+
+        <div data-question="3" class="mt-8 hidden">
+          <h2 class="font-display text-2xl text-jade-900">¿Qué intensidad buscas?</h2>
+          <div class="mt-6 grid gap-3">
+            <button type="button" class="quiz-option" data-next="result" data-scores='{"loto-esmeralda":2,"luz-serena":1}'>
+              Muy suave, casi un susurro
+            </button>
+            <button type="button" class="quiz-option" data-next="result" data-scores='{"esencia-del-valle":2,"luz-serena":1}'>
+              Media, presente sin invadir
+            </button>
+            <button type="button" class="quiz-option" data-next="result" data-scores='{"otono-dorado":2,"luz-serena":1}'>
+              Envolvente, que llene la casa
+            </button>
+          </div>
+        </div>
+
+        <div data-result class="mt-8 hidden">
+          <p class="eyebrow text-terracotta-700">Tu colección</p>
+          <h2 data-result-name class="mt-3 font-display text-3xl text-jade-900"></h2>
+          <p data-result-aroma class="mt-1 font-display text-base text-terracotta-700"></p>
+          <p data-result-tagline class="mt-4 text-base leading-relaxed text-ink/70"></p>
+          <div class="mt-7 flex flex-wrap gap-3">
+            <a data-result-link href="/tienda" class="btn-primary">Ver la colección</a>
+            <button type="button" data-restart class="btn-outline">Volver a empezar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script type="application/json" id="quiz-data" set:html={JSON.stringify(quizData)}></script>
+
+<style>
+  .quiz-option {
+    width: 100%;
+    border: 1px solid var(--color-cream-300);
+    padding: 1rem 1.25rem;
+    text-align: left;
+    font-size: 0.875rem;
+    color: color-mix(in srgb, var(--color-ink) 78%, transparent);
+    transition:
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  .quiz-option:hover {
+    border-color: var(--color-jade-900);
+    background-color: var(--color-jade-50);
+  }
+</style>
+
+<script>
+  type QuizItem = {
+    slug: string;
+    name: string;
+    aroma: string;
+    tagline: string;
+    accent: string;
+    soft: string;
+  };
+
+  const rawData = document.getElementById('quiz-data')?.textContent;
+  const data: QuizItem[] = rawData ? JSON.parse(rawData) : [];
+
+  const quiz = document.getElementById('quiz');
+  const stepLabel = document.querySelector<HTMLElement>('[data-step]');
+  const progress = document.querySelector<HTMLElement>('[data-progress]');
+  const progressLabel = document.querySelector<HTMLElement>('[data-progress-label]');
+  const resultPanel = document.querySelector<HTMLElement>('[data-result]');
+  const resultName = document.querySelector<HTMLElement>('[data-result-name]');
+  const resultAroma = document.querySelector<HTMLElement>('[data-result-aroma]');
+  const resultTagline = document.querySelector<HTMLElement>('[data-result-tagline]');
+  const resultLink = document.querySelector<HTMLAnchorElement>('[data-result-link]');
+  const restart = document.querySelector<HTMLButtonElement>('[data-restart]');
+
+  let scores: Record<string, number> = {};
+
+  function showQuestion(step: number) {
+    document.querySelectorAll<HTMLElement>('[data-question]').forEach((element) => {
+      element.classList.toggle('hidden', element.dataset.question !== String(step));
+    });
+    if (stepLabel) stepLabel.textContent = String(step);
+    const percent = Math.round((step / 3) * 100);
+    if (progress) progress.style.width = `${percent}%`;
+    if (progressLabel) progressLabel.textContent = `${percent}%`;
+  }
+
+  function showResult() {
+    document.querySelectorAll<HTMLElement>('[data-question]').forEach((element) => {
+      element.classList.add('hidden');
+    });
+    resultPanel?.classList.remove('hidden');
+    if (progress) progress.style.width = '100%';
+    if (progressLabel) progressLabel.textContent = '100%';
+    if (stepLabel) stepLabel.textContent = '3';
+
+    const winner = [...data].sort((a, b) => (scores[b.slug] ?? 0) - (scores[a.slug] ?? 0))[0];
+    if (!winner) return;
+
+    if (resultName) resultName.textContent = winner.name;
+    if (resultAroma) resultAroma.textContent = winner.aroma;
+    if (resultTagline) resultTagline.textContent = winner.tagline;
+    if (resultLink) resultLink.href = `/producto/${winner.slug}`;
+    if (resultPanel) {
+      resultPanel.style.borderLeft = `4px solid ${winner.accent}`;
+      resultPanel.style.background = `linear-gradient(90deg, ${winner.soft} 0%, transparent 60%)`;
+    }
+  }
+
+  quiz?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const option = target.closest<HTMLButtonElement>('.quiz-option');
+    if (!option) return;
+
+    const points = JSON.parse(option.dataset.scores ?? '{}') as Record<string, number>;
+    for (const [slug, value] of Object.entries(points)) {
+      scores[slug] = (scores[slug] ?? 0) + value;
+    }
+
+    const next = option.dataset.next;
+    if (next === 'result') showResult();
+    else if (next) showQuestion(Number(next));
+  });
+
+  restart?.addEventListener('click', () => {
+    scores = {};
+    resultPanel?.classList.add('hidden');
+    showQuestion(1);
+  });
+</script>

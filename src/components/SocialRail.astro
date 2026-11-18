@@ -1,0 +1,24 @@
+---
+import { socialLinks } from '../data/social';
+import SocialIcon from './SocialIcon.astro';
+---
+
+<aside
+  class="fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 flex-col gap-2 lg:flex"
+  aria-label="Redes sociales"
+>
+  {
+    socialLinks.map((link) => (
+      <a
+        href={link.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={link.label}
+        aria-label={link.label}
+        class="group flex h-11 w-11 items-center justify-center rounded-l-xs border border-r-0 border-cream-300 bg-cream-50/95 text-jade-900 shadow-[0_2px_14px_rgba(6,75,59,0.08)] backdrop-blur transition-all duration-300 hover:-translate-x-1 hover:border-jade-900 hover:bg-jade-900 hover:text-cream-50"
+      >
+        <SocialIcon name={link.key} />
+      </a>
+    ))
+  }
+</aside>

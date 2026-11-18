@@ -1,0 +1,475 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import { formatCOP, formatCompactCOP } from '../../lib/admin';
+import {
+  demoMonths,
+  demoTopProducts,
+  demoCities,
+  demoChannels,
+  demoStatsRanges,
+} from '../../data/admin-demo';
+import { getChannels, getCities, getMonths, getStatsRanges, getTopProducts } from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const months = supabase ? await getMonths(supabase) : demoMonths;
+const topProducts = supabase ? await getTopProducts(supabase) : demoTopProducts;
+const cities = supabase ? await getCities(supabase) : demoCities;
+const channels = supabase ? await getChannels(supabase) : demoChannels;
+const statsRanges = supabase ? await getStatsRanges(supabase) : demoStatsRanges;
+
+const current = statsRanges['30d'];
+const topMax = Math.max(1, ...topProducts.map((product) => product.revenue));
+const yearRevenue = months.reduce((sum, month) => sum + month.revenue, 0);
+
+const labels: Record<string, string[]> = {
+  '7d': ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+  '30d': ['1', '4', '7', '10', '13', '16', '19', '22', '25', '28', '30', 'Hoy'],
+  '90d': ['Sep 1', 'Sep 8', 'Sep 15', 'Sep 22', 'Oct 1', 'Oct 8', 'Oct 15', 'Oct 22', 'Nov 1', 'Nov 5', 'Nov 9', 'Hoy'],
+  year: months.map((month) => month.label),
+};
+
+const chartRanges = Object.fromEntries(
+  Object.entries(statsRanges).map(([key, value]) => [
+    key,
+    { ...value, labels: labels[key] ?? [] },
+  ]),
+);
+
+const topProduct = topProducts[0];
+const topCity = cities[0];
+const secondCity = cities[1];
+const topChannel = channels[0];
+const topCitiesShare = (topCity?.share ?? 0) + (secondCity?.share ?? 0);
+
+const insights = [
+  topProduct
+    ? {
+        icon: 'arrowUp',
+        title: `${topProduct.name} lidera las ventas`,
+        text: `${topProduct.units} unidades · ${formatCOP(topProduct.revenue)} en el periodo. Revisa si el tamaño ${topProduct.size} necesita más stock.`,
+      }
+    : {
+        icon: 'arrowUp',
+        title: 'Aún no hay ventas aprobadas',
+        text: 'Cuando confirmes pagos desde Pedidos, aquí verás los productos más vendidos.',
+      },
+  secondCity
+    ? {
+        icon: 'truck',
+        title: `${topCity.name} y ${secondCity.name} concentran el ${topCitiesShare}%`,
+        text: 'Considera una tarifa plana para ciudades principales y una campaña de recuperación para el resto del país.',
+      }
+    : {
+        icon: 'truck',
+        title: 'Aún no hay ciudades registradas',
+        text: 'Las ciudades se calculan con pedidos cuyo pago ya fue aprobado.',
+      },
+  topChannel
+    ? {
+        icon: 'coins',
+        title: `${topChannel.name} es el medio más usado`,
+        text: `${topChannel.share}% de los ingresos aprobados. Mantén el checkout simple: cada paso extra reduce la conversión.`,
+      }
+    : {
+        icon: 'coins',
+        title: 'Pagos manuales activos',
+        text: 'Confirma cada pago desde Pedidos. Cuando conectes Wompi, esta tarjeta mostrará el medio de pago con más ingresos.',
+      },
+];
+---
+
+<AdminLayout title="Estadísticas" section="Estadísticas">
+  <PageHeader
+    eyebrow="Negocio"
+    title="Estadísticas"
+    description="Ventas, ingresos y productos más vendidos. Los datos se calculan sobre pedidos con pago aprobado."
+  >
+    <button type="button" slot="actions" class="admin-btn admin-btn-outline" data-export-stats>
+      <AdminIcon name="download" size={14} />
+      Exportar reporte
+    </button>
+  </PageHeader>
+
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-1.5">
+      <button type="button" class="admin-chip" data-range="7d">7 días</button>
+      <button type="button" class="admin-chip is-active" data-range="30d">30 días</button>
+      <button type="button" class="admin-chip" data-range="90d">90 días</button>
+      <button type="button" class="admin-chip" data-range="year">Este año</button>
+    </div>
+    <p class="text-[0.68rem] text-ink/45">
+      Mostrando <span class="font-medium text-jade-900" data-range-label>últimos 30 días</span> · actualizado hace unos minutos
+    </p>
+  </div>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="admin-kpi">
+      <div class="relative z-10">
+        <div class="flex items-start justify-between gap-3">
+          <p class="text-[0.63rem] font-medium uppercase tracking-[0.14em] text-jade-900/55">Ingresos</p>
+          <span class="grid h-7 w-7 place-items-center rounded-xs bg-jade-50 text-jade-800">
+            <AdminIcon name="coins" size={15} />
+          </span>
+        </div>
+        <p class="mt-2 font-display text-[1.7rem] leading-none tracking-tight text-jade-900" data-kpi="revenue">
+          {formatCompactCOP(current.revenue)}
+        </p>
+        <p class="mt-2.5 flex items-center gap-1.5 text-[0.68rem]">
+          <span class="inline-flex items-center gap-0.5 font-medium text-jade-700" data-kpi="delta">
+            <AdminIcon name="arrowUp" size={12} />
+            {current.delta.toFixed(1).replace('.', ',')}%
+          </span>
+          <span class="text-ink/45">vs. periodo anterior</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="admin-kpi">
+      <div class="relative z-10">
+        <div class="flex items-start justify-between gap-3">
+          <p class="text-[0.63rem] font-medium uppercase tracking-[0.14em] text-jade-900/55">Pedidos pagados</p>
+          <span class="grid h-7 w-7 place-items-center rounded-xs bg-jade-50 text-jade-800">
+            <AdminIcon name="bag" size={15} />
+          </span>
+        </div>
+        <p class="mt-2 font-display text-[1.7rem] leading-none tracking-tight text-jade-900" data-kpi="orders">
+          {current.orders}
+        </p>
+        <p class="mt-2.5 text-[0.68rem] text-ink/45">
+          <span class="font-medium text-jade-700">{Math.round(current.orders / 30)}</span> pedidos por día en promedio
+        </p>
+      </div>
+    </div>
+
+    <div class="admin-kpi">
+      <div class="relative z-10">
+        <div class="flex items-start justify-between gap-3">
+          <p class="text-[0.63rem] font-medium uppercase tracking-[0.14em] text-jade-900/55">Ticket promedio</p>
+          <span class="grid h-7 w-7 place-items-center rounded-xs bg-jade-50 text-jade-800">
+            <AdminIcon name="chart" size={15} />
+          </span>
+        </div>
+        <p class="mt-2 font-display text-[1.7rem] leading-none tracking-tight text-jade-900" data-kpi="ticket">
+          {formatCOP(current.ticket)}
+        </p>
+        <p class="mt-2.5 text-[0.68rem] text-ink/45">con IVA incluido</p>
+      </div>
+    </div>
+
+    <div class="admin-kpi">
+      <div class="relative z-10">
+        <div class="flex items-start justify-between gap-3">
+          <p class="text-[0.63rem] font-medium uppercase tracking-[0.14em] text-jade-900/55">Conversión</p>
+          <span class="grid h-7 w-7 place-items-center rounded-xs bg-jade-50 text-jade-800">
+            <AdminIcon name="percent" size={15} />
+          </span>
+        </div>
+        <p class="mt-2 font-display text-[1.7rem] leading-none tracking-tight text-jade-900" data-kpi="conversion">
+          {current.conversion.toFixed(1).replace('.', ',')}%
+        </p>
+        <p class="mt-2.5 text-[0.68rem] text-ink/45">visitas que terminan en compra</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="mt-5 grid gap-5 xl:grid-cols-3">
+    <section class="admin-card xl:col-span-2">
+      <div class="admin-card-head">
+        <div>
+          <h2 class="admin-card-title">Evolución de ingresos</h2>
+          <p class="mt-0.5 text-[0.7rem] text-ink/45">
+            {formatCOP(yearRevenue)} en 2026 · los datos del mes en curso son parciales
+          </p>
+        </div>
+        <span class="admin-badge" data-tone="jade">COP</span>
+      </div>
+
+      <div class="px-4 pb-5 pt-6 sm:px-6">
+        <div class="flex h-52 items-end gap-1 sm:gap-2" data-chart>
+          {
+            chartRanges['30d'].series.map((value) => {
+              const max = Math.max(...chartRanges['30d'].series);
+              const height = Math.max(Math.round((value / max) * 100), 3);
+              return (
+                <div class="group flex h-full flex-1 flex-col justify-end gap-1" data-bar-wrap>
+                  <span class="text-center text-[0.52rem] text-ink/35 opacity-0 transition-opacity group-hover:opacity-100" data-bar-value>
+                    {formatCompactCOP(value)}
+                  </span>
+                  <div class="w-full rounded-t-[2px] bg-jade-800/80 transition-colors group-hover:bg-jade-700" style={`height:${height}%`} data-bar />
+                </div>
+              );
+            })
+          }
+        </div>
+        <div class="mt-2 flex gap-1 border-t border-cream-300 pt-2 sm:gap-2" data-chart-labels>
+          {
+            chartRanges['30d'].labels.map((label, index) => (
+              <span class:list={['flex-1 text-center text-[0.52rem] text-ink/40', index === 11 && 'font-semibold text-terracotta-700']} data-bar-label>
+                {label}
+              </span>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="admin-card-head">
+        <h2 class="admin-card-title">Métodos de pago</h2>
+        <span class="text-[0.65rem] text-ink/40">participación</span>
+      </div>
+
+      <div class="p-5">
+        <div class="flex h-3 w-full overflow-hidden rounded-full bg-cream-200">
+          {
+            channels.map((channel, index) => (
+              <span
+                class:list={[
+                  index === 0 && 'bg-jade-900',
+                  index === 1 && 'bg-jade-700',
+                  index === 2 && 'bg-terracotta-600',
+                  index === 3 && 'bg-blush-300',
+                ]}
+                style={`width:${channel.share}%`}
+                title={`${channel.name}: ${channel.share}%`}
+              />
+            ))
+          }
+        </div>
+
+        <ul class="mt-5 space-y-3">
+          {
+            channels.map((channel, index) => (
+              <li class="flex items-center gap-3 text-[0.75rem]">
+                <span
+                  class:list={[
+                    'h-2 w-2 rounded-full',
+                    index === 0 && 'bg-jade-900',
+                    index === 1 && 'bg-jade-700',
+                    index === 2 && 'bg-terracotta-600',
+                    index === 3 && 'bg-blush-300',
+                  ]}
+                />
+                <span class="flex-1 text-ink/65">{channel.name}</span>
+                <span class="text-ink/45">{channel.share}%</span>
+                <span class="w-20 text-right font-medium text-jade-900">{formatCompactCOP(channel.amount)}</span>
+              </li>
+            ))
+          }
+        </ul>
+
+        <div class="mt-5 border-t border-cream-300 pt-4 text-[0.68rem] leading-relaxed text-ink/45">
+          Los medios de pago se registran desde el checkout y se confirman a mano en Pedidos.
+          Wompi cobrará comisión por transacción, no una mensualidad fija.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="mt-5 grid gap-5 xl:grid-cols-3">
+    <section class="admin-card xl:col-span-2">
+      <div class="admin-card-head">
+        <div>
+          <h2 class="admin-card-title">Productos más vendidos</h2>
+          <p class="mt-0.5 text-[0.7rem] text-ink/45">Por unidades vendidas en los últimos 90 días.</p>
+        </div>
+        <a href="/admin/productos" class="admin-btn admin-btn-ghost admin-btn-sm">
+          Ver catálogo
+          <AdminIcon name="arrowRight" size={13} />
+        </a>
+      </div>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Producto</th>
+              <th class="num">Unidades</th>
+              <th class="num">Ingresos</th>
+              <th>Participación</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              topProducts.map((product, index) => (
+                <tr>
+                  <td class="font-display text-ink/30">{String(index + 1).padStart(2, '0')}</td>
+                  <td>
+                    <p class="font-medium text-jade-900">{product.name}</p>
+                    <p class="text-[0.66rem] text-ink/40">{product.size}</p>
+                  </td>
+                  <td class="num text-ink/70">{product.units}</td>
+                  <td class="num font-medium text-jade-900">{formatCOP(product.revenue)}</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <div class="admin-progress w-24">
+                        <span style={`width:${Math.round((product.revenue / topMax) * 100)}%`}></span>
+                      </div>
+                      <span class="text-[0.62rem] text-ink/40">{Math.round((product.revenue / topMax) * 100)}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="admin-card-head">
+        <h2 class="admin-card-title">Ventas por ciudad</h2>
+        <span class="text-[0.65rem] text-ink/40">pedidos</span>
+      </div>
+
+      <ul class="divide-y divide-cream-300">
+        {
+          cities.map((city) => (
+            <li class="px-4 py-3">
+              <div class="flex items-center justify-between text-[0.76rem]">
+                <span class="text-ink/70">{city.name}</span>
+                <span class="text-ink/45">{city.orders} · {city.share}%</span>
+              </div>
+              <div class="admin-progress mt-1.5">
+                <span style={`width:${city.share}%`}></span>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+
+      <p class="border-t border-cream-300 px-4 py-3 text-[0.66rem] leading-relaxed text-ink/40">
+        Envío gratis desde {formatCOP(180000)} en ciudades principales.
+      </p>
+    </section>
+  </div>
+
+  <section class="mt-5">
+    <h2 class="mb-3 font-display text-lg text-jade-900">Lo que notamos</h2>
+    <div class="grid gap-4 lg:grid-cols-3">
+      {
+        insights.map((insight) => (
+          <div class="admin-card p-4">
+            <span class="grid h-8 w-8 place-items-center rounded-xs bg-terracotta-600/10 text-terracotta-700">
+              <AdminIcon name={insight.icon} size={15} />
+            </span>
+            <h3 class="mt-2.5 font-display text-base text-jade-900">{insight.title}</h3>
+            <p class="mt-1 text-[0.74rem] leading-relaxed text-ink/55">{insight.text}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+</AdminLayout>
+
+<script type="application/json" id="stats-data" set:html={JSON.stringify(chartRanges)}></script>
+<script type="application/json" id="stats-months" set:html={JSON.stringify(months)}></script>
+
+<script>
+  import { formatCOP, formatCompactCOP } from '../../lib/admin';
+
+  type Range = {
+    revenue: number;
+    orders: number;
+    ticket: number;
+    conversion: number;
+    delta: number;
+    series: number[];
+    labels: string[];
+  };
+
+  const ranges: Record<string, Range> = JSON.parse(document.getElementById('stats-data')?.textContent ?? '{}');
+  const chips = document.querySelectorAll<HTMLButtonElement>('[data-range]');
+  const label = document.querySelector<HTMLElement>('[data-range-label]');
+  const bars = document.querySelectorAll<HTMLElement>('[data-bar]');
+  const barWraps = document.querySelectorAll<HTMLElement>('[data-bar-wrap]');
+  const barValues = document.querySelectorAll<HTMLElement>('[data-bar-value]');
+  const barLabels = document.querySelectorAll<HTMLElement>('[data-bar-label]');
+
+  const rangeLabels: Record<string, string> = {
+    '7d': 'últimos 7 días',
+    '30d': 'últimos 30 días',
+    '90d': 'últimos 90 días',
+    year: 'año 2026',
+  };
+
+  function setKpi(name: string, value: string) {
+    const node = document.querySelector<HTMLElement>(`[data-kpi="${name}"]`);
+    if (node) node.textContent = value;
+  }
+
+  function renderRange(key: string) {
+    const range = ranges[key];
+    if (!range) return;
+
+    setKpi('revenue', formatCompactCOP(range.revenue));
+    setKpi('orders', String(range.orders));
+    setKpi('ticket', formatCOP(range.ticket));
+    setKpi('conversion', `${range.conversion.toFixed(1).replace('.', ',')}%`);
+
+    const delta = document.querySelector<HTMLElement>('[data-kpi="delta"]');
+    if (delta) {
+      delta.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>${range.delta.toFixed(1).replace('.', ',')}%`;
+      delta.className = `inline-flex items-center gap-0.5 font-medium ${range.delta >= 0 ? 'text-jade-700' : 'text-rose-700'}`;
+    }
+
+    if (label) label.textContent = rangeLabels[key] ?? key;
+
+    const max = Math.max(...range.series);
+    const scale = key === 'year' ? 1 : 1;
+
+    bars.forEach((bar, index) => {
+      const value = range.series[index] ?? 0;
+      bar.style.height = `${Math.max(Math.round((value / max) * 100 * scale), 3)}%`;
+      bar.classList.toggle('bg-terracotta-600', index === range.series.length - 1);
+      bar.classList.toggle('bg-jade-800/80', index !== range.series.length - 1);
+      bar.parentElement?.classList.toggle('hidden', index >= range.series.length);
+    });
+
+    barWraps.forEach((wrap, index) => {
+      const value = range.series[index] ?? 0;
+      wrap.title = `${range.labels[index] ?? ''}: ${formatCOP(value)}`;
+    });
+
+    barValues.forEach((node, index) => {
+      const value = range.series[index] ?? 0;
+      node.textContent = formatCompactCOP(value);
+    });
+
+    barLabels.forEach((node, index) => {
+      node.textContent = range.labels[index] ?? '';
+      node.classList.toggle('hidden', index >= range.series.length);
+      node.classList.toggle('font-semibold', index === range.series.length - 1);
+      node.classList.toggle('text-terracotta-700', index === range.series.length - 1);
+    });
+  }
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      chips.forEach((item) => item.classList.toggle('is-active', item === chip));
+      renderRange(chip.dataset.range ?? '30d');
+    });
+  });
+
+  document.querySelector('[data-export-stats]')?.addEventListener('click', async () => {
+    const { downloadCsv } = await import('../../lib/admin');
+    const months = JSON.parse(document.getElementById('stats-months')?.textContent ?? '[]') as {
+      label: string;
+      revenue: number;
+      orders: number;
+    }[];
+    downloadCsv('iris-estadisticas-2026.csv', [
+      ['Mes', 'Ingresos COP', 'Pedidos'],
+      ...months.map((month) => [month.label, month.revenue, month.orders]),
+    ]);
+    (window as any).adminToast('Reporte de estadísticas exportado.');
+  });
+
+  renderRange('30d');
+</script>

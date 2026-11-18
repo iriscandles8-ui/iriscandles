@@ -1,0 +1,354 @@
+---
+import Base from '../../layouts/Base.astro';
+import CandleVisual from '../../components/CandleVisual.astro';
+import ProductCard from '../../components/ProductCard.astro';
+import { collections } from '../../data/collections';
+import type { Collection } from '../../data/collections';
+import { formatCOP, pricesAreProvisional, resolveSizes, shipping } from '../../data/pricing';
+
+interface Props {
+  collection: Collection;
+}
+
+export function getStaticPaths() {
+  return collections.map((collection) => ({
+    params: { slug: collection.slug },
+    props: { collection },
+  }));
+}
+
+const { collection } = Astro.props as Props;
+const related = collections.filter((item) => item.slug !== collection.slug).slice(0, 3);
+const sizes = resolveSizes(collection);
+const defaultPrice = sizes[0]?.priceCop ?? null;
+
+const accordions = [
+  {
+    title: 'Ingredientes y cuidados',
+    body: `${collection.description} Cera de soya, mecha de algodón y fragancias libres de ftalatos. Recorta la mecha a 5 mm antes de cada uso y deja que la cera se derrita hasta el borde en la primera encendida.`,
+  },
+  {
+    title: 'Envíos',
+    body: 'Enviamos a toda Colombia con tarifa calculada por peso y destino. Los pedidos se despachan en 1 a 3 días hábiles. En Bogotá también puedes recoger en el taller con cita previa.',
+  },
+  {
+    title: 'Cambios y devoluciones',
+    body: 'Si la vela llega con daños, escríbenos dentro de los 5 días siguientes con una foto del producto y la caja. Te enviamos un reemplazo o devolvemos el dinero. Por higiene, no recibimos velas encendidas.',
+  },
+];
+---
+
+<Base
+  title={`${collection.name} · ${collection.aroma} · Iris Candles`}
+  description={`${collection.tagline} ${collection.description}`}
+>
+  <section class="py-10 lg:py-16">
+    <div class="container-iris">
+      <nav aria-label="Ruta de navegación" class="text-[0.68rem] uppercase tracking-[0.14em] text-jade-900/45">
+        <a href="/" class="hover:text-jade-900">Inicio</a>
+        <span class="mx-2">/</span>
+        <a href="/tienda" class="hover:text-jade-900">Tienda</a>
+        <span class="mx-2">/</span>
+        <span class="text-jade-900/70">{collection.name}</span>
+      </nav>
+
+      <div class="mt-8 grid gap-12 lg:grid-cols-12 lg:gap-16">
+        <div class="lg:col-span-6">
+          <div class="lg:sticky lg:top-28">
+            <CandleVisual
+              class="aspect-[4/5] rounded-xs border border-cream-300"
+              accent={collection.theme.accent}
+              soft={collection.theme.soft}
+              label={collection.name}
+              sublabel={collection.aroma}
+            />
+            <div class="mt-4 grid grid-cols-3 gap-3">
+              {
+                ['Frente', 'Detalle', 'Empaque'].map((label) => (
+                  <div class="flex aspect-square items-center justify-center border border-cream-300 bg-cream-100/50 text-[0.6rem] uppercase tracking-[0.16em] text-jade-900/40">
+                    {label}
+                  </div>
+                ))
+              }
+            </div>
+            <p class="mt-3 text-[0.68rem] text-ink/45">
+              Fotografía de estudio en preparación.
+            </p>
+          </div>
+        </div>
+
+        <div class="lg:col-span-6">
+          <p class="eyebrow text-terracotta-700">
+            Colección {collection.number} · {collection.family}
+          </p>
+          <h1 class="mt-4 font-display text-4xl leading-tight text-jade-900 sm:text-5xl">
+            {collection.name}
+          </h1>
+          <p class="mt-2 font-display text-lg tracking-[0.04em] text-terracotta-700">
+            {collection.aroma}
+          </p>
+          <p class="mt-5 text-base leading-relaxed text-ink/75">{collection.description}</p>
+
+          <dl class="mt-8 grid grid-cols-3 gap-4 border-y border-cream-300 py-5 text-center">
+            <div>
+              <dt class="text-[0.6rem] uppercase tracking-[0.16em] text-jade-900/45">Intensidad</dt>
+              <dd class="mt-1 font-display text-lg text-jade-900">{collection.intensity}/5</dd>
+            </div>
+            <div>
+              <dt class="text-[0.6rem] uppercase tracking-[0.16em] text-jade-900/45">Duración</dt>
+              <dd class="mt-1 font-display text-lg text-jade-900">{collection.burnHours}</dd>
+            </div>
+            <div>
+              <dt class="text-[0.6rem] uppercase tracking-[0.16em] text-jade-900/45">Tamaños</dt>
+              <dd class="mt-1 font-display text-lg text-jade-900">{collection.sizes.length}</dd>
+            </div>
+          </dl>
+
+          <div class="mt-8">
+            <p class="mb-3 text-[0.68rem] uppercase tracking-[0.16em] text-jade-900/55">
+              Pirámide olfativa
+            </p>
+            <div class="grid gap-4 sm:grid-cols-3">
+              {
+                [
+                  { label: 'Salida', notes: collection.notes.top },
+                  { label: 'Corazón', notes: collection.notes.heart },
+                  { label: 'Fondo', notes: collection.notes.base },
+                ].map((group) => (
+                  <div class="border-t border-cream-300 pt-3">
+                    <p class="text-[0.6rem] uppercase tracking-[0.16em] text-terracotta-700">
+                      {group.label}
+                    </p>
+                    <ul class="mt-2 space-y-1 text-sm text-ink/70">
+                      {group.notes.map((note) => (
+                        <li>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+
+          <div class="mt-8" data-purchase>
+            <div class="mb-3 flex items-baseline justify-between gap-3">
+              <p class="text-[0.68rem] uppercase tracking-[0.16em] text-jade-900/55">
+                Elige el tamaño
+              </p>
+              <p class="text-[0.62rem] uppercase tracking-[0.12em] text-jade-900/40">
+                IVA incluido
+              </p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              {
+                sizes.map((size, index) => (
+                  <label class="cursor-pointer border border-cream-300 px-4 py-4 transition-colors has-[:checked]:border-jade-900 has-[:checked]:bg-jade-50">
+                    <input
+                      type="radio"
+                      name="size"
+                      value={size.sku}
+                      data-sku={size.sku}
+                      data-price={size.priceCop ?? ''}
+                      checked={index === 0}
+                      class="sr-only"
+                    />
+                    <span class="block font-display text-lg text-jade-900">{size.label}</span>
+                    <span class="mt-1 block text-[0.7rem] text-ink/55">
+                      {size.priceCop !== null ? formatCOP(size.priceCop) : 'Precio próximamente'}
+                    </span>
+                  </label>
+                ))
+              }
+            </div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap items-end justify-between gap-4 border-y border-cream-300 py-4">
+            <div>
+              <p class="text-[0.6rem] uppercase tracking-[0.16em] text-jade-900/45">Precio</p>
+              <p class="mt-1 font-display text-2xl text-jade-900" data-price-display>
+                {defaultPrice !== null ? formatCOP(defaultPrice) : 'Próximamente'}
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="mr-1 text-[0.66rem] uppercase tracking-[0.12em] text-jade-900/45">
+                Cantidad
+              </span>
+              <div class="flex items-center border border-cream-300 bg-cream-50">
+                <button
+                  type="button"
+                  class="grid h-10 w-9 place-items-center text-lg text-jade-900 transition-colors hover:bg-cream-100 disabled:opacity-30"
+                  data-qty-down
+                  aria-label="Quitar una unidad"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  value="1"
+                  min="1"
+                  max="24"
+                  inputmode="numeric"
+                  data-qty
+                  class="h-10 w-12 border-x border-cream-300 bg-transparent text-center text-sm text-jade-900 focus:outline-none"
+                  aria-label="Cantidad"
+                />
+                <button
+                  type="button"
+                  class="grid h-10 w-9 place-items-center text-lg text-jade-900 transition-colors hover:bg-cream-100 disabled:opacity-30"
+                  data-qty-up
+                  aria-label="Agregar una unidad"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+            <button type="button" class="btn-primary flex-1" data-add-to-cart>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M6 7h12l-1.2 12.1a1.5 1.5 0 0 1-1.5 1.4H8.7a1.5 1.5 0 0 1-1.5-1.4L6 7Z"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M9 7V5.6A3 3 0 0 1 12 3a3 3 0 0 1 3 2.6V7"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  stroke-linecap="round"
+                />
+              </svg>
+              Agregar al carrito
+            </button>
+            <a href="/tienda" class="btn-outline flex-1">Ver otras colecciones</a>
+          </div>
+
+          <p
+            data-cart-feedback
+            role="status"
+            aria-live="polite"
+            class="mt-3 hidden items-center gap-2 text-[0.72rem] text-jade-800"
+          ></p>
+
+          <ul class="mt-5 grid gap-2 text-[0.7rem] text-ink/55 sm:grid-cols-3">
+            <li class="flex items-center gap-1.5">
+              <span class="h-1 w-1 rounded-full bg-terracotta-600"></span>
+              Envío gratis desde {formatCOP(shipping.freeFromCop)}
+            </li>
+            <li class="flex items-center gap-1.5">
+              <span class="h-1 w-1 rounded-full bg-terracotta-600"></span>
+              Nequi · Daviplata · Transferencia
+            </li>
+            <li class="flex items-center gap-1.5">
+              <span class="h-1 w-1 rounded-full bg-terracotta-600"></span>
+              Cambios dentro de 5 días
+            </li>
+          </ul>
+
+          {
+            pricesAreProvisional && (
+              <p class="mt-4 border-l-2 border-terracotta-600/40 pl-3 text-[0.68rem] leading-relaxed text-ink/45">
+                Los precios son de referencia mientras se publican los definitivos. El pago en
+                línea se activa al conectar la pasarela.
+              </p>
+            )
+          }
+
+          <div class="mt-8 divide-y divide-cream-300 border-y border-cream-300">
+            {
+              accordions.map((item) => (
+                <details class="group py-4">
+                  <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-jade-900">
+                    {item.title}
+                    <span class="text-terracotta-600 transition-transform group-open:rotate-45">+</span>
+                  </summary>
+                  <p class="mt-3 text-sm leading-relaxed text-ink/65">{item.body}</p>
+                </details>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-cream-300 bg-cream-100/30 py-16">
+    <div class="container-iris">
+      <h2 class="font-display text-2xl text-jade-900 sm:text-3xl">También te puede gustar</h2>
+      <div class="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        {related.map((item) => <ProductCard collection={item} />)}
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { addToCart } from '../../lib/cart';
+  import { formatCOP } from '../../data/pricing';
+
+  const addButton = document.querySelector<HTMLButtonElement>('[data-add-to-cart]');
+  const priceDisplay = document.querySelector<HTMLElement>('[data-price-display]');
+  const feedback = document.querySelector<HTMLElement>('[data-cart-feedback]');
+  const qtyInput = document.querySelector<HTMLInputElement>('[data-qty]');
+
+  const MIN_QTY = 1;
+  const MAX_QTY = 24;
+
+  const clamp = (value: number) => Math.min(MAX_QTY, Math.max(MIN_QTY, Math.round(value) || MIN_QTY));
+
+  const selectedSize = (): HTMLInputElement | null =>
+    document.querySelector<HTMLInputElement>('input[name="size"]:checked');
+
+  function syncPrice() {
+    const size = selectedSize();
+    if (!size || !priceDisplay) return;
+    const price = Number(size.dataset.price);
+    priceDisplay.textContent = Number.isFinite(price) && price > 0 ? formatCOP(price) : 'Próximamente';
+  }
+
+  document.querySelectorAll<HTMLInputElement>('input[name="size"]').forEach((radio) => {
+    radio.addEventListener('change', syncPrice);
+  });
+
+  document.querySelector('[data-qty-up]')?.addEventListener('click', () => {
+    if (qtyInput) qtyInput.value = String(clamp(Number(qtyInput.value) + 1));
+  });
+
+  document.querySelector('[data-qty-down]')?.addEventListener('click', () => {
+    if (qtyInput) qtyInput.value = String(clamp(Number(qtyInput.value) - 1));
+  });
+
+  qtyInput?.addEventListener('change', () => {
+    qtyInput.value = String(clamp(Number(qtyInput.value)));
+  });
+
+  function showFeedback(message: string) {
+    if (!feedback) return;
+    feedback.replaceChildren();
+    feedback.className = 'mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.72rem] text-jade-800';
+    feedback.append(message);
+    const link = document.createElement('a');
+    link.href = '/carrito';
+    link.className = 'font-medium underline underline-offset-2 hover:text-terracotta-700';
+    link.textContent = 'Ver carrito →';
+    feedback.append(link);
+  }
+
+  addButton?.addEventListener('click', () => {
+    const size = selectedSize();
+    if (!size || !size.dataset.sku) return;
+
+    const qty = clamp(Number(qtyInput?.value ?? 1));
+    const label = size.closest('label')?.querySelector('span')?.textContent?.trim() ?? '';
+    const productName = document.querySelector('h1')?.textContent?.trim() ?? '';
+
+    addToCart(size.dataset.sku, qty);
+
+    if (qtyInput) qtyInput.value = '1';
+    showFeedback(`Agregado: ${qty} × ${productName} ${label}.`);
+    addButton.blur();
+  });
+</script>

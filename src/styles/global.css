@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@theme {
+  /* Jade */
+  --color-jade-950: #032e24;
+  --color-jade-900: #064b3b;
+  --color-jade-800: #0a5a47;
+  --color-jade-700: #0e6b52;
+  --color-jade-500: #1e8a6e;
+  --color-jade-100: #cfe5dc;
+  --color-jade-50: #e7f1ec;
+
+  /* Terracota */
+  --color-terracotta-800: #7a3a20;
+  --color-terracotta-700: #8f4526;
+  --color-terracotta-600: #b85e37;
+  --color-terracotta-400: #d07a52;
+  --color-terracotta-300: #e0a184;
+
+  /* Crema */
+  --color-cream-50: #fbf7ee;
+  --color-cream-100: #f3e9d6;
+  --color-cream-200: #ede0c8;
+  --color-cream-300: #e8dcc4;
+
+  /* Blush */
+  --color-blush-200: #e8b4a8;
+  --color-blush-300: #e0a396;
+  --color-blush-400: #d9917f;
+
+  /* Neutro de lectura */
+  --color-ink: #1f2e28;
+
+  --font-display: "Cinzel", ui-serif, Georgia, serif;
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xs: 2px;
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-cream-50);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    color: var(--color-jade-900);
+  }
+
+  ::selection {
+    background: var(--color-jade-900);
+    color: var(--color-cream-50);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-terracotta-600);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .container-iris {
+    @apply mx-auto w-full max-w-[1280px] px-5 sm:px-8 lg:px-12;
+  }
+
+  .eyebrow {
+    @apply text-[0.72rem] font-medium uppercase tracking-[0.2em];
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xs bg-jade-900 px-6 py-3.5 text-sm font-medium text-cream-50 transition-colors duration-300 hover:bg-jade-700;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-xs border border-jade-900/25 px-6 py-3.5 text-sm font-medium text-jade-900 transition-colors duration-300 hover:border-jade-900 hover:bg-jade-50;
+  }
+
+  .btn-cream {
+    @apply inline-flex items-center justify-center gap-2 rounded-xs bg-cream-50 px-6 py-3.5 text-sm font-medium text-jade-900 transition-colors duration-300 hover:bg-cream-100;
+  }
+
+  .link-arrow {
+    @apply inline-flex items-center gap-2 border-b border-terracotta-600/40 pb-1 text-sm font-medium text-jade-900 transition-colors duration-300 hover:border-terracotta-600 hover:text-terracotta-700;
+  }
+
+  .field {
+    @apply w-full rounded-xs border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink placeholder:text-ink/40 transition-colors duration-200 focus:border-jade-700 focus:outline-none;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-[0.12em] text-jade-900/80;
+  }
+}
+
+/* Textura de papel muy sutil */
+.texture-paper {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+/* Aparición al hacer scroll */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.8s var(--ease-soft),
+    transform 0.8s var(--ease-soft);
+}
+
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Llama */
+@keyframes iris-flicker {
+  0%,
+  100% {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-50%, -1px) scale(1.06);
+    opacity: 1;
+  }
+}
+
+.flame {
+  animation: iris-flicker 3.4s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .flame {
+    animation: none;
+  }
+}

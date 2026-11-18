@@ -1,0 +1,109 @@
+---
+import Base from '../layouts/Base.astro';
+import CandleVisual from '../components/CandleVisual.astro';
+
+const values = [
+  {
+    title: 'Lotes pequeños',
+    text: 'Vertemos por tandas para controlar la temperatura de la cera y que el aroma se asiente bien. No hacemos stock infinito.',
+  },
+  {
+    title: 'Materiales honestos',
+    text: 'Cera de soya, mecha de algodón y fragancias libres de ftalatos. Sin parafina y sin atajos.',
+  },
+  {
+    title: 'Tiempo de por medio',
+    text: 'Cada vela cura dos semanas antes de salir del taller. Ese tiempo es lo que hace que el aroma dure.',
+  },
+];
+---
+
+<Base
+  title="Nosotros · Iris Candles"
+  description="Iris Candles es un taller colombiano de velas artesanales vertidas en pequeños lotes, con cera de soya y fragancias sin ftalatos."
+>
+  <section class="py-14 lg:py-24">
+    <div class="container-iris grid items-center gap-12 lg:grid-cols-12">
+      <div class="lg:col-span-7">
+        <p class="eyebrow text-terracotta-700">El taller</p>
+        <h1 class="mt-4 font-display text-4xl leading-[1.1] text-jade-900 sm:text-5xl">
+          Hacemos velas para<br class="hidden sm:block" />
+          quedarse un rato más.
+        </h1>
+        <p class="mt-6 max-w-xl text-base leading-relaxed text-ink/75">
+          Iris nació de una costumbre simple: encender algo al final del día. De ahí salieron
+          cuatro colecciones que huelen a recuerdos concretos —una sobremesa, un mercado, un
+          jardín, una noche en calma— y un taller pequeño donde cada vela se vierte a mano.
+        </p>
+        <p class="mt-4 max-w-xl text-base leading-relaxed text-ink/75">
+          No buscamos llenar una casa de aroma. Buscamos que un rincón huela a algo que te
+          devuelva a un momento.
+        </p>
+      </div>
+      <div class="lg:col-span-5">
+        <CandleVisual
+          class="aspect-[4/5] rounded-xs border border-cream-300"
+          accent="#0E6B52"
+          soft="#E7F1EC"
+          label="Loto Esmeralda"
+          sublabel="Flor de Loto"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="border-y border-cream-300 bg-cream-100/40 py-16 lg:py-20">
+    <div class="container-iris grid gap-10 sm:grid-cols-3">
+      {
+        values.map((value, index) => (
+          <div class="border-t border-terracotta-600/40 pt-5">
+            <span class="font-display text-sm tracking-[0.2em] text-terracotta-700">
+              0{index + 1}
+            </span>
+            <h2 class="mt-3 font-display text-xl text-jade-900">{value.title}</h2>
+            <p class="mt-2 text-sm leading-relaxed text-ink/65">{value.text}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="py-16 lg:py-24">
+    <div class="container-iris grid gap-12 lg:grid-cols-12">
+      <div class="lg:col-span-5">
+        <p class="eyebrow text-terracotta-700">Lo que hay dentro</p>
+        <h2 class="mt-3 font-display text-3xl text-jade-900 sm:text-4xl">Sin secretos</h2>
+      </div>
+      <dl class="grid gap-6 sm:grid-cols-2 lg:col-span-7">
+        {
+          [
+            ['Cera', 'Soya 100%, vertida a baja temperatura.'],
+            ['Mecha', 'Algodón trenzado, sin plomo.'],
+            ['Fragancia', 'Libre de ftalatos, en concentración media.'],
+            ['Envase', 'Vidrio ámbar reutilizable con tapón.'],
+            ['Curado', 'Dos semanas antes de cada envío.'],
+            ['Origen', 'Hecho en Colombia, en lotes de 20 a 30 unidades.'],
+          ].map(([term, description]) => (
+            <div class="border-t border-cream-300 pt-3">
+              <dt class="text-[0.65rem] uppercase tracking-[0.16em] text-jade-900/50">{term}</dt>
+              <dd class="mt-1 text-sm text-ink/70">{description}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <section class="bg-jade-900 py-16 text-cream-50">
+    <div class="container-iris flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
+      <div>
+        <p class="eyebrow text-blush-200">¿Hacemos algo juntos?</p>
+        <h2 class="mt-3 font-display text-3xl text-cream-50">Encuentra tu aroma</h2>
+        <p class="mt-2 max-w-md text-sm text-cream-50/65">
+          Tres preguntas y te decimos qué colección acompaña mejor tu momento.
+        </p>
+      </div>
+      <a href="/encuentra-tu-aroma" class="btn-cream shrink-0">Hacer el test</a>
+    </div>
+  </section>
+</Base>

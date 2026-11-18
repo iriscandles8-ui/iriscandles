@@ -1,0 +1,12 @@
+---
+import type { Tone } from '../../lib/admin';
+
+interface Props {
+  label: string;
+  tone?: Tone;
+}
+
+const { label, tone = 'slate' } = Astro.props;
+---
+
+<span class="admin-badge" data-tone={tone}>{label}</span>

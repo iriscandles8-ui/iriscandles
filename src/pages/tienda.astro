@@ -1,0 +1,107 @@
+---
+import Base from '../layouts/Base.astro';
+import ProductCard from '../components/ProductCard.astro';
+import { collections } from '../data/collections';
+import { pricesAreProvisional } from '../data/pricing';
+---
+
+<Base
+  title="Tienda · Iris Candles"
+  description="Cuatro colecciones de velas artesanales colombianas: Otoño Dorado, Esencia del Valle, Loto Esmeralda y Luz Serena."
+>
+  <section class="border-b border-cream-300 bg-cream-100/40">
+    <div class="container-iris py-14 lg:py-20">
+      <p class="eyebrow text-terracotta-700">Tienda</p>
+      <h1 class="mt-4 max-w-2xl font-display text-4xl leading-tight text-jade-900 sm:text-5xl">
+        Cuatro paisajes olfativos
+      </h1>
+      <p class="mt-4 max-w-xl text-base leading-relaxed text-ink/70">
+        Dos tamaños por aroma, vertidos a mano en pequeños lotes. Elige la colección que
+        quieras habitar.
+      </p>
+    </div>
+  </section>
+
+  <section class="py-12 lg:py-16">
+    <div class="container-iris">
+      {
+        pricesAreProvisional && (
+          <p class="mb-8 border-l-2 border-terracotta-600 bg-cream-100/60 px-4 py-3 text-xs leading-relaxed text-ink/65">
+            Los precios son de referencia mientras se publican los definitivos. La fotografía de
+            estudio está en preparación; por ahora mostramos una ilustración de cada vela.
+          </p>
+        )
+      }
+
+      <div class="mb-10 flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por colección">
+        <button
+          type="button"
+          class="filter-chip is-active rounded-xs border border-jade-900 px-4 py-2 text-[0.7rem] uppercase tracking-[0.14em] text-jade-900 transition-colors"
+          data-filter="all"
+        >
+          Todas
+        </button>
+        {
+          collections.map((collection) => (
+            <button
+              type="button"
+              class="filter-chip rounded-xs border border-cream-300 px-4 py-2 text-[0.7rem] uppercase tracking-[0.14em] text-jade-900/60 transition-colors hover:border-jade-900/40 hover:text-jade-900"
+              data-filter={collection.slug}
+            >
+              {collection.name}
+            </button>
+          ))
+        }
+      </div>
+
+      <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          collections.map((collection) => (
+            <ProductCard collection={collection} />
+          ))
+        }
+      </div>
+
+      <div class="mt-16 border-t border-cream-300 pt-8 text-sm leading-relaxed text-ink/60">
+        <p>
+          Todos los pedidos incluyen instrucciones de cuidado. Si buscas más de 15 unidades
+          para un evento, visita
+          <a href="/eventos" class="ml-1 border-b border-terracotta-600/50 text-jade-900 hover:text-terracotta-700">
+            pedidos para eventos
+          </a>.
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .filter-chip.is-active {
+    background-color: var(--color-jade-900);
+    color: var(--color-cream-50);
+  }
+</style>
+
+<script>
+  const chips = document.querySelectorAll<HTMLButtonElement>('.filter-chip');
+  const cards = document.querySelectorAll<HTMLElement>('[data-collection]');
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const filter = chip.dataset.filter ?? 'all';
+
+      chips.forEach((item) => {
+        item.classList.toggle('is-active', item === chip);
+        item.classList.toggle('border-jade-900', item === chip);
+        item.classList.toggle('text-jade-900', item === chip);
+        item.classList.toggle('border-cream-300', item !== chip);
+        item.classList.toggle('text-jade-900/60', item !== chip);
+      });
+
+      cards.forEach((card) => {
+        const matches = filter === 'all' || card.dataset.collection === filter;
+        card.parentElement?.classList.toggle('hidden', !matches);
+      });
+    });
+  });
+</script>

@@ -1,0 +1,303 @@
+---
+import '@fontsource/cinzel/600.css';
+import '@fontsource/poppins/300.css';
+import '@fontsource/poppins/400.css';
+import '@fontsource/poppins/500.css';
+import '@fontsource/poppins/600.css';
+import '../styles/global.css';
+import '../styles/admin.css';
+import AdminIcon from '../components/admin/AdminIcon.astro';
+import { ADMIN_NAV, isDemoMode, ROLE_LABELS } from '../lib/admin';
+import { getBadges } from '../lib/admin-data';
+import { createSupabaseServer } from '../lib/supabase-server';
+
+interface Props {
+  title: string;
+  section?: string;
+  description?: string;
+}
+
+const { title, section = 'Panel', description } = Astro.props;
+
+const rawPath = Astro.url.pathname.replace(/\/+$/, '');
+const path = rawPath === '' ? '/' : rawPath;
+
+const session = Astro.locals.adminSession;
+const supabase = createSupabaseServer(Astro);
+const badges = supabase ? await getBadges(supabase) : { orders: 0, reviews: 0, stock: 0 };
+
+const displayName = session?.fullName || session?.email || 'Iris Candles';
+const displayEmail = session?.email ?? '';
+const roleLabel = session ? ROLE_LABELS[session.role] : 'Propietaria';
+const displayInitials =
+  displayName
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'IC';
+
+const groups = ['Operación', 'Catálogo', 'Negocio'] as const;
+const today = new Intl.DateTimeFormat('es-CO', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+}).format(new Date());
+---
+
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title === 'Panel' ? 'Panel' : `${title} · Panel`} · Iris Candles</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#032e24" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {description && <meta name="description" content={description} />}
+  </head>
+
+  <body class="admin-body">
+    <div class="admin-shell">
+      <aside id="admin-sidebar" class="admin-sidebar admin-scroll" aria-label="Navegación del panel">
+        <div class="flex items-center justify-between gap-3 px-5 pb-5 pt-5">
+          <a href="/admin" class="flex items-center gap-2.5">
+            <img
+              src="/brand/logo-iris-candles.svg"
+              alt=""
+              class="h-10 w-10 object-contain"
+            />
+            <span class="leading-tight">
+              <span class="block font-display text-sm tracking-[0.16em] text-cream-50">IRIS</span>
+              <span class="block text-[0.52rem] uppercase tracking-[0.24em] text-cream-50/45">
+                Panel interno
+              </span>
+            </span>
+          </a>
+          <button
+            type="button"
+            class="admin-icon-btn text-cream-50/70 hover:bg-cream-50/10 hover:text-cream-50 lg:hidden"
+            data-sidebar-close
+            aria-label="Cerrar menú"
+          >
+            <AdminIcon name="close" size={18} />
+          </button>
+        </div>
+
+        <nav class="flex-1 space-y-6 overflow-y-auto px-3 pb-6">
+          {
+            groups.map((group) => (
+              <div>
+                <p class="admin-nav-group mb-2">{group}</p>
+                <ul class="space-y-0.5">
+                  {ADMIN_NAV.filter((item) => item.group === group).map((item) => {
+                    const active = path === item.href;
+                    const badge = item.badge ? badges[item.badge] : 0;
+                    return (
+                      <li>
+                        <a
+                          href={item.href}
+                          class:list={['admin-nav-link', active && 'is-active']}
+                          aria-current={active ? 'page' : undefined}
+                        >
+                          <AdminIcon name={item.icon} size={17} class="admin-nav-icon" />
+                          <span>{item.label}</span>
+                          {badge > 0 && <span class="admin-nav-badge">{badge}</span>}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          }
+        </nav>
+
+        <div class="border-t border-cream-50/10 px-4 py-4">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener"
+            class="flex items-center justify-between gap-2 rounded-xs px-2 py-2 text-[0.72rem] text-cream-50/60 transition-colors hover:bg-cream-50/10 hover:text-cream-50"
+          >
+            Ver la tienda
+            <AdminIcon name="external" size={14} />
+          </a>
+
+          <div class="mt-2 flex items-center gap-2.5 border-t border-cream-50/10 px-2 pt-3">
+            <span class="admin-avatar bg-cream-50/10 text-cream-50">{displayInitials}</span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-xs text-cream-50">{displayName}</p>
+              <p class="text-[0.6rem] uppercase tracking-[0.1em] text-cream-50/40">{roleLabel}</p>
+            </div>
+            <a
+              href="/admin/recuperar"
+              class="admin-icon-btn text-cream-50/55 hover:bg-cream-50/10 hover:text-cream-50"
+              title="Cambiar contraseña"
+              aria-label="Cambiar contraseña"
+            >
+              <AdminIcon name="lock" size={15} />
+            </a>
+            <button
+              type="button"
+              data-logout
+              class="admin-icon-btn text-cream-50/55 hover:bg-cream-50/10 hover:text-cream-50"
+              title="Cerrar sesión"
+              aria-label="Cerrar sesión"
+            >
+              <AdminIcon name="logout" size={16} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div id="admin-backdrop" class="admin-backdrop hidden lg:hidden" data-sidebar-close></div>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <button
+            type="button"
+            class="admin-icon-btn lg:hidden"
+            data-sidebar-open
+            aria-label="Abrir menú"
+          >
+            <AdminIcon name="menu" size={20} />
+          </button>
+
+          <div class="min-w-0 flex-1">
+            <p class="text-[0.55rem] uppercase tracking-[0.18em] text-jade-900/40">
+              Panel de administración
+            </p>
+            <p class="truncate text-[0.82rem] font-medium text-jade-900">{section}</p>
+          </div>
+
+          <span class="hidden text-[0.68rem] text-ink/40 xl:block">{today}</span>
+
+          {
+            isDemoMode && (
+              <span class="admin-badge hidden sm:inline-flex" data-tone="amber">
+                Modo demo
+              </span>
+            )
+          }
+
+          <a href="/" target="_blank" rel="noopener" class="admin-btn admin-btn-outline admin-btn-sm hidden sm:inline-flex">
+            Ver tienda
+            <AdminIcon name="external" size={13} />
+          </a>
+
+          <div class="flex items-center gap-2 border-l border-cream-300 pl-3">
+            <span class="admin-avatar">{displayInitials}</span>
+            <div class="hidden min-w-0 md:block">
+              <p class="truncate text-xs font-medium text-jade-900">{displayName}</p>
+              <p class="truncate text-[0.6rem] text-ink/45">{displayEmail}</p>
+            </div>
+          </div>
+        </header>
+
+        {
+          isDemoMode && (
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-[0.7rem] leading-relaxed text-amber-900 lg:px-10">
+              <AdminIcon name="alert" size={14} class="shrink-0" />
+              <span>
+                <strong class="font-semibold">Modo demostración.</strong> Estás viendo datos de
+                ejemplo; los cambios no se guardan.
+              </span>
+              <a href="/admin/configuracion#conexion" class="underline decoration-amber-400 underline-offset-2 hover:text-amber-950">
+                Conectar Supabase
+              </a>
+            </div>
+          )
+        }
+
+        <main id="admin-content" class="admin-content">
+          <slot />
+        </main>
+
+        <footer class="border-t border-cream-300 px-5 py-4 text-[0.62rem] text-ink/35 lg:px-10">
+          Iris Candles · Panel interno · v0.1 · Los datos de esta sesión son privados.
+        </footer>
+      </div>
+    </div>
+
+    <div id="admin-toast" class="admin-toast" role="status" aria-live="polite"></div>
+
+    <script>
+      import { supabase } from '../lib/supabase';
+
+      const sidebar = document.getElementById('admin-sidebar');
+      const backdrop = document.getElementById('admin-backdrop');
+      const toast = document.getElementById('admin-toast');
+      let toastTimer: number | undefined;
+
+      const closeSidebar = () => {
+        sidebar?.classList.remove('is-open');
+        backdrop?.classList.add('hidden');
+        document.body.style.overflow = '';
+      };
+
+      const openSidebar = () => {
+        sidebar?.classList.add('is-open');
+        backdrop?.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      };
+
+      document.querySelectorAll('[data-sidebar-open]').forEach((button) => {
+        button.addEventListener('click', openSidebar);
+      });
+
+      document.querySelectorAll('[data-sidebar-close]').forEach((button) => {
+        button.addEventListener('click', closeSidebar);
+      });
+
+      (window as any).adminToast = (message: string, tone: 'ok' | 'warn' = 'ok') => {
+        if (!toast) return;
+        toast.textContent = message;
+        toast.style.background = tone === 'warn' ? '#8f4526' : '';
+        toast.classList.add('is-visible');
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 3200);
+      };
+
+      (window as any).openAdminModal = (id: string) => {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        modal.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+        modal.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+      };
+
+      (window as any).closeAdminModal = (id: string) => {
+        document.getElementById(id)?.classList.remove('is-open');
+        document.body.style.overflow = '';
+      };
+
+      document.querySelectorAll<HTMLElement>('.admin-modal').forEach((modal) => {
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) {
+            modal.classList.remove('is-open');
+            document.body.style.overflow = '';
+          }
+        });
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          document.querySelectorAll('.admin-modal.is-open').forEach((modal) => {
+            modal.classList.remove('is-open');
+          });
+          closeSidebar();
+          document.body.style.overflow = '';
+        }
+      });
+
+      document.querySelector('[data-logout]')?.addEventListener('click', async () => {
+        if (supabase) {
+          await supabase.auth.signOut();
+        }
+        window.location.href = '/admin/login';
+      });
+    </script>
+  </body>
+</html>

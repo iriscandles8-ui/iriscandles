@@ -1,0 +1,1010 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import {
+  formatCOP,
+  formatCompactCOP,
+  formatDateShort,
+  ORDER_STATUS,
+  PAYMENT_STATUS,
+  EVENT_STATUS,
+} from '../../lib/admin';
+import { demoOrders, demoProducts, demoEventRequests } from '../../data/admin-demo';
+import { getEventRequests, getOrders, getProducts } from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const orders = supabase
+  ? await getOrders(supabase)
+  : [...demoOrders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+const products = supabase ? await getProducts(supabase) : demoProducts;
+const eventRequests = supabase ? await getEventRequests(supabase) : demoEventRequests;
+const pending = orders.filter((order) => order.status === 'pending').length;
+const toDispatch = orders.filter((order) => order.status === 'paid' || order.status === 'processing').length;
+const collected = orders
+  .filter((order) => order.payment === 'approved')
+  .reduce((sum, order) => sum + order.total, 0);
+
+const filters = [
+  { id: 'all', label: 'Todos', count: orders.length },
+  { id: 'pending', label: 'Pendientes', count: pending },
+  { id: 'paid', label: 'Pagados', count: orders.filter((order) => order.status === 'paid').length },
+  { id: 'processing', label: 'En preparación', count: orders.filter((order) => order.status === 'processing').length },
+  { id: 'shipped', label: 'Enviados', count: orders.filter((order) => order.status === 'shipped').length },
+  { id: 'delivered', label: 'Entregados', count: orders.filter((order) => order.status === 'delivered').length },
+  { id: 'cancelled', label: 'Cancelados', count: orders.filter((order) => order.status === 'cancelled').length },
+];
+
+const variantOptions = products.flatMap((product) =>
+  product.variants.map((variant) => ({
+    id: variant.id,
+    label: `${product.name} · ${variant.size}`,
+    price: variant.price,
+    name: product.name,
+    size: variant.size,
+  })),
+);
+
+const csvRows = [
+  ['Pedido', 'Cliente', 'Correo', 'Ciudad', 'Fecha', 'Estado', 'Pago', 'Total COP'],
+  ...orders.map((order) => [
+    order.number,
+    order.customer,
+    order.email,
+    order.city,
+    order.createdAt.slice(0, 10),
+    ORDER_STATUS[order.status]?.label ?? order.status,
+    PAYMENT_STATUS[order.payment]?.label ?? order.payment,
+    order.total,
+  ]),
+];
+---
+
+<AdminLayout title="Pedidos" section="Pedidos">
+  <PageHeader
+    eyebrow="Operación"
+    title="Pedidos"
+    description="Confirma pagos manualmente, actualiza el estado y registra la guía de envío. El stock se descuenta al confirmar el pago."
+  >
+    <button
+      type="button"
+      slot="actions"
+      class="admin-btn admin-btn-outline"
+      data-export-orders
+    >
+      <AdminIcon name="download" size={14} />
+      Exportar CSV
+    </button>
+    <button type="button" slot="actions" class="admin-btn admin-btn-primary" data-open-modal="create-order-modal">
+      <AdminIcon name="plus" size={15} />
+      Crear pedido
+    </button>
+  </PageHeader>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard label="Pedidos totales" value={String(orders.length)} icon="bag" hint="últimos 30 días" />
+    <StatCard label="Por confirmar" value={String(pending)} icon="clock" hint="esperando pago" />
+    <StatCard label="Por despachar" value={String(toDispatch)} icon="truck" hint="listos para empacar" />
+    <StatCard label="Cobrado" value={formatCompactCOP(collected)} icon="coins" hint="pagos aprobados" />
+  </section>
+
+  <section class="admin-card mt-5">
+    <div class="admin-card-head gap-3">
+      <div class="relative w-full sm:max-w-xs">
+        <AdminIcon name="search" size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/35" />
+        <input
+          type="search"
+          id="order-search"
+          class="admin-input pl-9"
+          placeholder="Buscar por pedido, cliente o ciudad…"
+          aria-label="Buscar pedidos"
+        />
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        {
+          filters.map((filter) => (
+            <button
+              type="button"
+              class:list={['admin-chip', filter.id === 'all' && 'is-active']}
+              data-order-filter={filter.id}
+            >
+              {filter.label}
+              <span class="count">{filter.count}</span>
+            </button>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Pedido</th>
+            <th>Cliente</th>
+            <th>Fecha</th>
+            <th>Unidades</th>
+            <th class="num">Total</th>
+            <th>Pago</th>
+            <th>Estado</th>
+            <th class="text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="orders-body">
+          {
+            orders.map((order) => {
+              const units = order.items.reduce((sum, item) => sum + item.quantity, 0);
+              const status = ORDER_STATUS[order.status];
+              const payment = PAYMENT_STATUS[order.payment];
+              return (
+                <tr
+                  class="is-clickable"
+                  data-order-row={order.id}
+                  data-order-id={order.id}
+                  data-status={order.status}
+                >
+                  <td class="whitespace-nowrap font-medium text-jade-900">{order.number}</td>
+                  <td>
+                    <p class="text-ink/80">{order.customer}</p>
+                    <p class="text-[0.66rem] text-ink/40">{order.email}</p>
+                  </td>
+                  <td class="whitespace-nowrap text-ink/55">{formatDateShort(order.createdAt)}</td>
+                  <td class="text-ink/60">{units} u.</td>
+                  <td class="num font-medium text-jade-900">{formatCOP(order.total)}</td>
+                  <td>
+                    <span class="admin-badge" data-tone={payment?.tone ?? 'slate'} data-payment-cell>
+                      {payment?.label ?? order.payment}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="admin-badge" data-tone={status?.tone ?? 'slate'} data-status-cell>
+                      {status?.label ?? order.status}
+                    </span>
+                  </td>
+                  <td class="text-right">
+                    <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-open-order={order.id}>
+                      Ver
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-cream-300 px-4 py-3 text-[0.68rem] text-ink/45">
+      <span data-orders-count>Mostrando {orders.length} pedidos</span>
+      <span>Los pagos se confirman manualmente desde cada pedido. Wompi se puede conectar más adelante.</span>
+    </div>
+  </section>
+
+  <section id="eventos" class="admin-card mt-5 scroll-mt-24">
+    <div class="admin-card-head">
+      <div>
+        <h2 class="admin-card-title">Solicitudes de evento</h2>
+        <p class="mt-0.5 text-[0.7rem] text-ink/45">
+          Mínimo 15 unidades · Cotización manual antes de crear el pedido.
+        </p>
+      </div>
+      <span class="admin-badge" data-tone="amber">
+        {eventRequests.filter((request) => request.status === 'new').length} nuevas
+      </span>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Solicitante</th>
+            <th>Tipo</th>
+            <th>Cantidad</th>
+            <th>Fecha evento</th>
+            <th>Recibida</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            eventRequests.map((request) => (
+              <tr>
+                <td>
+                  <p class="font-medium text-jade-900">{request.name}</p>
+                  <p class="text-[0.66rem] text-ink/40">{request.company}</p>
+                </td>
+                <td class="text-ink/60">{request.type}</td>
+                <td class="num text-ink/70">{request.quantity} u.</td>
+                <td class="text-ink/55">{formatDateShort(request.date)}</td>
+                <td class="text-ink/55">{formatDateShort(request.createdAt)}</td>
+                <td>
+                  <select class="admin-select max-w-[9.5rem] py-1 text-[0.72rem]" data-event-status>
+                    {
+                      Object.entries(EVENT_STATUS).map(([value, meta]) => (
+                        <option value={value} selected={value === request.status}>
+                          {meta.label}
+                        </option>
+                      ))
+                    }
+                  </select>
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Detalle de pedido -->
+  <div
+    id="order-detail-modal"
+    class="admin-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="order-detail-title"
+  >
+    <div class="admin-modal-panel is-wide">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Detalle del pedido</p>
+          <h2 id="order-detail-title" class="admin-card-title mt-1">Pedido</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="order-detail-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div id="order-detail-body" class="admin-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Crear pedido -->
+  <div id="create-order-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="create-order-title">
+    <form id="create-order-form" class="admin-modal-panel">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Pedido manual</p>
+          <h2 id="create-order-title" class="admin-card-title mt-1">Crear pedido</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="create-order-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+
+      <div class="admin-modal-body grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="admin-label" for="new-order-name">Nombre del cliente</label>
+          <input id="new-order-name" name="name" required class="admin-input" placeholder="Camila Restrepo" />
+        </div>
+        <div>
+          <label class="admin-label" for="new-order-email">Correo</label>
+          <input id="new-order-email" name="email" type="email" required class="admin-input" placeholder="camila@correo.com" />
+        </div>
+        <div>
+          <label class="admin-label" for="new-order-phone">Teléfono</label>
+          <input id="new-order-phone" name="phone" class="admin-input" placeholder="+57 300 000 0000" />
+        </div>
+        <div>
+          <label class="admin-label" for="new-order-city">Ciudad</label>
+          <input id="new-order-city" name="city" required class="admin-input" placeholder="Bogotá" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="admin-label" for="new-order-address">Dirección de entrega</label>
+          <input id="new-order-address" name="address" required class="admin-input" placeholder="Calle 70 # 5-42, apto 302" />
+        </div>
+        <div>
+          <label class="admin-label" for="new-order-variant">Producto</label>
+          <select id="new-order-variant" name="variant" class="admin-select" required>
+            {
+              variantOptions.map((variant) => (
+                <option value={variant.id} data-price={variant.price} data-name={variant.name} data-size={variant.size}>
+                  {variant.label} · {formatCOP(variant.price)}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+        <div>
+          <label class="admin-label" for="new-order-quantity">Cantidad</label>
+          <input id="new-order-quantity" name="quantity" type="number" min="1" value="1" class="admin-input" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="admin-label" for="new-order-notes">Notas internas</label>
+          <textarea id="new-order-notes" name="notes" rows="2" class="admin-textarea" placeholder="Empaque de regalo, fecha de entrega…"></textarea>
+        </div>
+      </div>
+
+      <div class="admin-modal-foot">
+        <div class="mr-auto text-[0.7rem] text-ink/50">
+          Total estimado: <span class="font-medium text-jade-900" data-new-order-total>{formatCOP(variantOptions[0]?.price ?? 0)}</span>
+        </div>
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="create-order-modal">Cancelar</button>
+        <button type="submit" class="admin-btn admin-btn-primary">Crear pedido</button>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script type="application/json" id="orders-data" set:html={JSON.stringify(orders)}></script>
+<script type="application/json" id="orders-csv" set:html={JSON.stringify(csvRows)}></script>
+<script type="application/json" id="orders-live" set:html={JSON.stringify(Boolean(supabase))}></script>
+
+<script>
+  import {
+    formatCOP,
+    formatDateShort,
+    formatDateTime,
+    downloadCsv,
+    ORDER_STATUS,
+    PAYMENT_STATUS,
+  } from '../../lib/admin';
+
+  type OrderItem = { name: string; size: string; quantity: number; unitPrice: number };
+  type OrderStatus =
+    | 'pending'
+    | 'paid'
+    | 'processing'
+    | 'shipped'
+    | 'delivered'
+    | 'cancelled'
+    | 'refunded';
+  type PaymentStatus = 'pending' | 'approved' | 'declined' | 'voided' | 'error';
+  type Order = {
+    id: string;
+    number: string;
+    customer: string;
+    email: string;
+    phone: string;
+    city: string;
+    address: string;
+    status: OrderStatus;
+    payment: PaymentStatus;
+    total: number;
+    shipping: number;
+    items: OrderItem[];
+    createdAt: string;
+    notes?: string;
+    internalNotes?: string;
+    tracking?: string;
+    carrier?: string;
+  };
+
+  type OrderChanges = {
+    status?: OrderStatus;
+    payment?: PaymentStatus;
+    tracking?: string;
+    carrier?: string;
+    internalNotes?: string;
+  };
+
+  const dataNode = document.getElementById('orders-data');
+  const orders: Order[] = dataNode ? JSON.parse(dataNode.textContent ?? '[]') : [];
+  const byId = new Map(orders.map((order) => [order.id, order]));
+  const liveNode = document.getElementById('orders-live');
+  const isLive = liveNode ? JSON.parse(liveNode.textContent ?? 'false') === true : false;
+
+  const tbody = document.getElementById('orders-body');
+  const search = document.getElementById('order-search') as HTMLInputElement | null;
+  const countLabel = document.querySelector<HTMLElement>('[data-orders-count]');
+  const detailBody = document.getElementById('order-detail-body');
+  const detailTitle = document.getElementById('order-detail-title');
+  const chips = document.querySelectorAll<HTMLButtonElement>('[data-order-filter]');
+
+  let activeFilter = 'all';
+
+  const escapeHtml = (value: string): string =>
+    value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
+
+  const statusBadge = (status: string, cell = 'status'): string => {
+    const meta = ORDER_STATUS[status] ?? { label: status, tone: 'slate' };
+    return `<span class="admin-badge" data-tone="${meta.tone}" data-${cell}-cell>${meta.label}</span>`;
+  };
+
+  const paymentBadge = (payment: string): string => {
+    const meta = PAYMENT_STATUS[payment] ?? { label: payment, tone: 'slate' };
+    return `<span class="admin-badge" data-tone="${meta.tone}" data-payment-cell>${meta.label}</span>`;
+  };
+
+  const optionsHtml = (record: Record<string, { label: string }>, current: string): string =>
+    Object.entries(record)
+      .map(
+        ([value, meta]) =>
+          `<option value="${value}"${value === current ? ' selected' : ''}>${meta.label}</option>`,
+      )
+      .join('');
+
+  const rowHtml = (order: Order): string => {
+    const units = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    return `
+      <tr class="is-clickable" data-order-row="${order.id}" data-order-id="${order.id}" data-status="${order.status}">
+        <td class="whitespace-nowrap font-medium text-jade-900">${escapeHtml(order.number)}</td>
+        <td>
+          <p class="text-ink/80">${escapeHtml(order.customer)}</p>
+          <p class="text-[0.66rem] text-ink/40">${escapeHtml(order.email)}</p>
+        </td>
+        <td class="whitespace-nowrap text-ink/55">${formatDateShort(order.createdAt)}</td>
+        <td class="text-ink/60">${units} u.</td>
+        <td class="num font-medium text-jade-900">${formatCOP(order.total)}</td>
+        <td>${paymentBadge(order.payment)}</td>
+        <td>${statusBadge(order.status)}</td>
+        <td class="text-right">
+          <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-open-order="${order.id}">Ver</button>
+        </td>
+      </tr>`;
+  };
+
+  function applyFilters() {
+    if (!tbody) return;
+    const term = (search?.value ?? '').trim().toLowerCase();
+    let visible = 0;
+
+    tbody.querySelectorAll<HTMLTableRowElement>('tr[data-order-row]').forEach((row) => {
+      const order = byId.get(row.dataset.orderRow ?? '');
+      const matchesStatus = activeFilter === 'all' || order?.status === activeFilter;
+      const haystack = `${order?.number} ${order?.customer} ${order?.email} ${order?.city}`.toLowerCase();
+      const matchesSearch = term === '' || haystack.includes(term);
+      const show = matchesStatus && matchesSearch;
+      row.classList.toggle('hidden', !show);
+      if (show) visible += 1;
+    });
+
+    if (countLabel) {
+      countLabel.textContent =
+        visible === 1 ? 'Mostrando 1 pedido' : `Mostrando ${visible} de ${orders.length} pedidos`;
+    }
+  }
+
+  function syncRow(order: Order) {
+    const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-order-row="${order.id}"]`);
+    if (!row) return;
+    row.dataset.status = order.status;
+    const statusCell = row.querySelector<HTMLElement>('[data-status-cell]');
+    const paymentCell = row.querySelector<HTMLElement>('[data-payment-cell]');
+    const status = ORDER_STATUS[order.status];
+    const payment = PAYMENT_STATUS[order.payment];
+    if (statusCell && status) {
+      statusCell.textContent = status.label;
+      statusCell.dataset.tone = status.tone;
+    }
+    if (paymentCell && payment) {
+      paymentCell.textContent = payment.label;
+      paymentCell.dataset.tone = payment.tone;
+    }
+    applyFilters();
+  }
+
+  function updateFilterCounts() {
+    const counts: Record<string, number> = {
+      all: orders.length,
+      pending: orders.filter((order) => order.status === 'pending').length,
+      paid: orders.filter((order) => order.status === 'paid').length,
+      processing: orders.filter((order) => order.status === 'processing').length,
+      shipped: orders.filter((order) => order.status === 'shipped').length,
+      delivered: orders.filter((order) => order.status === 'delivered').length,
+      cancelled: orders.filter((order) => order.status === 'cancelled').length,
+    };
+
+    chips.forEach((chip) => {
+      const id = chip.dataset.orderFilter ?? 'all';
+      const count = chip.querySelector<HTMLElement>('.count');
+      if (count) count.textContent = String(counts[id] ?? 0);
+    });
+  }
+
+  async function saveOrder(order: Order, changes: OrderChanges, message: string): Promise<boolean> {
+    if (!isLive) {
+      Object.assign(order, changes);
+      syncRow(order);
+      updateFilterCounts();
+      openDetail(order.id);
+      (window as any).adminToast(`${message} (demo).`, changes.status === 'cancelled' ? 'warn' : 'ok');
+      return true;
+    }
+
+    const payload = {
+      orderId: order.id,
+      ...(changes.status !== undefined ? { status: changes.status } : {}),
+      ...(changes.payment !== undefined ? { paymentStatus: changes.payment } : {}),
+      ...(changes.tracking !== undefined ? { tracking: changes.tracking } : {}),
+      ...(changes.carrier !== undefined ? { carrier: changes.carrier } : {}),
+      ...(changes.internalNotes !== undefined ? { internalNotes: changes.internalNotes } : {}),
+    };
+
+    try {
+      const response = await fetch('/api/admin/orders/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        order?: Order;
+        stockAdjusted?: boolean;
+      };
+
+      if (!response.ok) {
+        (window as any).adminToast(data.error || 'No se pudo guardar el cambio.', 'warn');
+        return false;
+      }
+
+      Object.assign(order, data.order ?? changes);
+      syncRow(order);
+      updateFilterCounts();
+      openDetail(order.id);
+      (window as any).adminToast(
+        data.stockAdjusted ? `${message} Stock descontado.` : message,
+      );
+      return true;
+    } catch {
+      (window as any).adminToast('No hay conexión con el servidor. Inténtalo de nuevo.', 'warn');
+      return false;
+    }
+  }
+
+  function detailHtml(order: Order): string {
+    const subtotal = order.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const timeline = [
+      { label: 'Pedido creado', date: formatDateTime(order.createdAt), done: true },
+      {
+        label: 'Pago confirmado',
+        date: order.payment === 'approved' ? 'Confirmado' : 'En proceso',
+        done: order.payment === 'approved',
+      },
+      {
+        label: 'Enviado',
+        date: order.tracking ? `${order.carrier ?? 'Transportadora'} · ${order.tracking}` : 'Sin despachar',
+        done: Boolean(order.tracking) || order.status === 'shipped' || order.status === 'delivered',
+      },
+      {
+        label: 'Entregado',
+        date: order.status === 'delivered' ? 'Entregado' : 'Pendiente',
+        done: order.status === 'delivered',
+      },
+    ];
+    const canCancel = !['cancelled', 'delivered', 'refunded'].includes(order.status);
+
+    return `
+      <div class="flex flex-wrap items-center gap-2">
+        ${statusBadge(order.status)}
+        ${paymentBadge(order.payment)}
+        <span class="text-[0.68rem] text-ink/40">${formatDateTime(order.createdAt)}</span>
+      </div>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div class="border border-cream-300 bg-cream-50 p-3.5">
+          <p class="text-[0.58rem] uppercase tracking-[0.16em] text-jade-900/45">Cliente</p>
+          <p class="mt-1.5 text-sm font-medium text-jade-900">${escapeHtml(order.customer)}</p>
+          <p class="mt-0.5 text-[0.72rem] text-ink/55">${escapeHtml(order.email)}</p>
+          <p class="text-[0.72rem] text-ink/55">${escapeHtml(order.phone)}</p>
+        </div>
+        <div class="border border-cream-300 bg-cream-50 p-3.5">
+          <p class="text-[0.58rem] uppercase tracking-[0.16em] text-jade-900/45">Entrega</p>
+          <p class="mt-1.5 text-[0.78rem] text-ink/70">${escapeHtml(order.address)}</p>
+          <p class="text-[0.72rem] text-ink/55">${escapeHtml(order.city)}</p>
+          ${order.tracking ? `<p class="mt-1 text-[0.68rem] text-jade-700">Guía ${escapeHtml(order.tracking)}</p>` : ''}
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <p class="mb-2 text-[0.58rem] uppercase tracking-[0.16em] text-jade-900/45">Productos</p>
+        <div class="border border-cream-300">
+          <table class="admin-table">
+            <thead>
+              <tr><th>Producto</th><th>Tamaño</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Subtotal</th></tr>
+            </thead>
+            <tbody>
+              ${order.items
+                .map(
+                  (item) => `
+                <tr>
+                  <td class="text-ink/75">${escapeHtml(item.name)}</td>
+                  <td class="text-ink/55">${escapeHtml(item.size)}</td>
+                  <td class="num text-ink/65">${item.quantity}</td>
+                  <td class="num text-ink/65">${formatCOP(item.unitPrice)}</td>
+                  <td class="num font-medium text-jade-900">${formatCOP(item.quantity * item.unitPrice)}</td>
+                </tr>`,
+                )
+                .join('')}
+            </tbody>
+          </table>
+          <div class="space-y-1.5 border-t border-cream-300 p-3.5 text-[0.75rem]">
+            <div class="flex justify-between text-ink/55"><span>Subtotal</span><span>${formatCOP(subtotal)}</span></div>
+            <div class="flex justify-between text-ink/55"><span>Envío</span><span>${order.shipping === 0 ? 'Gratis' : formatCOP(order.shipping)}</span></div>
+            <div class="flex justify-between border-t border-cream-300 pt-1.5 font-medium text-jade-900"><span>Total</span><span>${formatCOP(order.total)}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div>
+          <p class="mb-2 text-[0.58rem] uppercase tracking-[0.16em] text-jade-900/45">Seguimiento</p>
+          <ol class="space-y-2.5">
+            ${timeline
+              .map(
+                (step) => `
+              <li class="flex gap-2.5 text-[0.72rem]">
+                <span class="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full ${step.done ? 'bg-jade-700 text-cream-50' : 'border border-cream-300 bg-cream-50 text-transparent'}">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                </span>
+                <span class="flex-1 ${step.done ? 'text-ink/70' : 'text-ink/35'}">${step.label}</span>
+                <span class="text-[0.65rem] ${step.done ? 'text-ink/45' : 'text-ink/25'}">${step.date}</span>
+              </li>`,
+              )
+              .join('')}
+          </ol>
+        </div>
+
+        <div class="border border-cream-300 bg-cream-50 p-3.5">
+          <p class="mb-2 text-[0.58rem] uppercase tracking-[0.16em] text-jade-900/45">Gestión del pedido</p>
+          <div class="grid gap-3">
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="admin-label" for="detail-status">Estado del pedido</label>
+                <select id="detail-status" class="admin-select" data-detail-status>
+                  ${optionsHtml(ORDER_STATUS, order.status)}
+                </select>
+              </div>
+              <div>
+                <label class="admin-label" for="detail-payment">Estado del pago</label>
+                <select id="detail-payment" class="admin-select" data-detail-payment>
+                  ${optionsHtml(PAYMENT_STATUS, order.payment)}
+                </select>
+              </div>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="admin-label" for="detail-carrier">Transportadora</label>
+                <input
+                  id="detail-carrier"
+                  class="admin-input"
+                  data-detail-carrier
+                  value="${escapeHtml(order.carrier ?? '')}"
+                  placeholder="Envía"
+                />
+              </div>
+              <div>
+                <label class="admin-label" for="detail-tracking">Número de guía</label>
+                <input
+                  id="detail-tracking"
+                  class="admin-input"
+                  data-detail-tracking
+                  value="${escapeHtml(order.tracking ?? '')}"
+                  placeholder="ENV-000000"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="admin-label" for="detail-notes">Notas internas</label>
+              <textarea
+                id="detail-notes"
+                rows="2"
+                class="admin-textarea"
+                data-detail-notes
+                placeholder="Empaque, fecha de entrega, acuerdos de pago…"
+              >${escapeHtml(order.internalNotes ?? order.notes ?? '')}</textarea>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="admin-btn admin-btn-primary admin-btn-sm"
+                data-save-order
+                data-order-id="${order.id}"
+              >
+                Guardar cambios
+              </button>
+              <span class="text-[0.64rem] text-ink/45">
+                ${isLive ? 'Se guarda en Supabase' : 'Modo demo: no se guarda'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-cream-300 pt-4">
+        ${order.payment !== 'approved' ? `<button type="button" class="admin-btn admin-btn-primary" data-order-action="approve" data-order-id="${order.id}">Confirmar pago</button>` : ''}
+        ${order.payment === 'approved' && order.status === 'pending' ? `<button type="button" class="admin-btn admin-btn-primary" data-order-action="accept" data-order-id="${order.id}">Aceptar pedido</button>` : ''}
+        ${order.status === 'paid' || order.status === 'processing' ? `<button type="button" class="admin-btn admin-btn-primary" data-order-action="ship" data-order-id="${order.id}">Marcar como enviado</button>` : ''}
+        ${order.status === 'shipped' ? `<button type="button" class="admin-btn admin-btn-primary" data-order-action="deliver" data-order-id="${order.id}">Confirmar entrega</button>` : ''}
+        <button type="button" class="admin-btn admin-btn-outline" data-order-action="email" data-order-id="${order.id}">Reenviar correo</button>
+        ${canCancel ? `<button type="button" class="admin-btn admin-btn-danger ml-auto" data-order-action="cancel" data-order-id="${order.id}">Cancelar</button>` : ''}
+      </div>
+    `;
+  }
+
+  function openDetail(id: string) {
+    const order = byId.get(id);
+    if (!order || !detailBody) return;
+    if (detailTitle) detailTitle.textContent = `Pedido ${order.number}`;
+    detailBody.innerHTML = detailHtml(order);
+    (window as any).openAdminModal('order-detail-modal');
+  }
+
+  tbody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const trigger = target.closest<HTMLElement>('[data-open-order]');
+    const row = target.closest<HTMLElement>('[data-order-row]');
+    const id = trigger?.dataset.openOrder ?? row?.dataset.orderRow;
+    if (id) openDetail(id);
+  });
+
+  function readDetailChanges(order: Order): OrderChanges {
+    if (!detailBody) return {};
+
+    const statusEl = detailBody.querySelector<HTMLSelectElement>('[data-detail-status]');
+    const paymentEl = detailBody.querySelector<HTMLSelectElement>('[data-detail-payment]');
+    const carrierEl = detailBody.querySelector<HTMLInputElement>('[data-detail-carrier]');
+    const trackingEl = detailBody.querySelector<HTMLInputElement>('[data-detail-tracking]');
+    const notesEl = detailBody.querySelector<HTMLTextAreaElement>('[data-detail-notes]');
+
+    const changes: OrderChanges = {};
+
+    if (statusEl && statusEl.value !== order.status) changes.status = statusEl.value as OrderStatus;
+    if (paymentEl && paymentEl.value !== order.payment) changes.payment = paymentEl.value as PaymentStatus;
+
+    if (carrierEl) {
+      const value = carrierEl.value.trim();
+      if (value !== (order.carrier ?? '')) changes.carrier = value;
+    }
+
+    if (trackingEl) {
+      const value = trackingEl.value.trim();
+      if (value !== (order.tracking ?? '')) changes.tracking = value;
+    }
+
+    if (notesEl) {
+      const value = notesEl.value.trim();
+      if (value !== (order.internalNotes ?? order.notes ?? '')) changes.internalNotes = value;
+    }
+
+    return changes;
+  }
+
+  detailBody?.addEventListener('change', (event) => {
+    const target = event.target as HTMLSelectElement;
+    if (!target.matches('[data-detail-payment]')) return;
+    if (target.value !== 'approved') return;
+
+    const statusEl = detailBody?.querySelector<HTMLSelectElement>('[data-detail-status]');
+    if (statusEl && statusEl.value === 'pending') {
+      statusEl.value = 'paid';
+      (window as any).adminToast('Pago aprobado: el pedido pasa a “Pagado”. Guarda los cambios para confirmar.');
+    }
+  });
+
+  detailBody?.addEventListener('click', async (event) => {
+    const target = event.target as HTMLElement;
+
+    const saveButton = target.closest<HTMLButtonElement>('[data-save-order]');
+    if (saveButton) {
+      const order = byId.get(saveButton.dataset.orderId ?? '');
+      if (!order) return;
+
+      const changes = readDetailChanges(order);
+      if (Object.keys(changes).length === 0) {
+        (window as any).adminToast('No hay cambios por guardar.');
+        return;
+      }
+
+      saveButton.disabled = true;
+      const saved = await saveOrder(order, changes, `Pedido ${order.number} actualizado.`);
+      if (!saved) saveButton.disabled = false;
+      return;
+    }
+
+    const button = target.closest<HTMLButtonElement>('[data-order-action]');
+    if (!button) return;
+
+    const order = byId.get(button.dataset.orderId ?? '');
+    if (!order) return;
+
+    const action = button.dataset.orderAction;
+
+    if (action === 'approve') {
+      button.disabled = true;
+      await saveOrder(
+        order,
+        {
+          payment: 'approved',
+          ...(order.status === 'pending' ? { status: 'paid' as OrderStatus } : {}),
+        },
+        `Pago del pedido ${order.number} confirmado.`,
+      );
+    }
+
+    if (action === 'accept') {
+      button.disabled = true;
+      await saveOrder(order, { status: 'processing' }, `Pedido ${order.number} aceptado.`);
+    }
+
+    if (action === 'ship') {
+      const tracking = window.prompt('Número de guía de la transportadora:', order.tracking ?? 'ENV-');
+      if (tracking === null) return;
+      button.disabled = true;
+      await saveOrder(
+        order,
+        {
+          status: 'shipped',
+          tracking: tracking.trim() || 'Sin guía',
+          carrier: order.carrier ?? 'Envía',
+        },
+        `Pedido ${order.number} marcado como enviado.`,
+      );
+    }
+
+    if (action === 'deliver') {
+      button.disabled = true;
+      await saveOrder(order, { status: 'delivered' }, `Pedido ${order.number} entregado.`);
+    }
+
+    if (action === 'cancel') {
+      if (!window.confirm(`¿Cancelar el pedido ${order.number}? Esta acción no se puede deshacer.`)) return;
+      button.disabled = true;
+      await saveOrder(order, { status: 'cancelled' }, `Pedido ${order.number} cancelado.`);
+    }
+
+    if (action === 'email') {
+      (window as any).adminToast(
+        isLive
+          ? 'El envío de correos aún no está conectado.'
+          : `Correo de confirmación reenviado a ${order.email} (demo).`,
+        'warn',
+      );
+    }
+  });
+
+  search?.addEventListener('input', applyFilters);
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      activeFilter = chip.dataset.orderFilter ?? 'all';
+      chips.forEach((item) => item.classList.toggle('is-active', item === chip));
+      applyFilters();
+    });
+  });
+
+  document.querySelector('[data-export-orders]')?.addEventListener('click', () => {
+    const node = document.getElementById('orders-csv');
+    const rows = node ? (JSON.parse(node.textContent ?? '[]') as (string | number)[][]) : [];
+    downloadCsv('iris-pedidos.csv', rows);
+    (window as any).adminToast('Pedidos exportados en CSV.');
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.closeModal;
+      if (id) (window as any).closeAdminModal(id);
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-open-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.openModal;
+      if (id) (window as any).openAdminModal(id);
+    });
+  });
+
+  /* ------------------------- Crear pedido manual ------------------------- */
+
+  const createForm = document.getElementById('create-order-form') as HTMLFormElement | null;
+  const variantSelect = document.getElementById('new-order-variant') as HTMLSelectElement | null;
+  const quantityInput = document.getElementById('new-order-quantity') as HTMLInputElement | null;
+  const totalLabel = document.querySelector<HTMLElement>('[data-new-order-total]');
+
+  function updateNewTotal() {
+    if (!variantSelect || !quantityInput || !totalLabel) return;
+    const price = Number(variantSelect.selectedOptions[0]?.dataset.price ?? 0);
+    const quantity = Math.max(Number(quantityInput.value) || 1, 1);
+    totalLabel.textContent = formatCOP(price * quantity);
+  }
+
+  variantSelect?.addEventListener('change', updateNewTotal);
+  quantityInput?.addEventListener('input', updateNewTotal);
+
+  createForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!createForm.reportValidity() || !variantSelect || !quantityInput) return;
+
+    const formData = new FormData(createForm);
+    const option = variantSelect.selectedOptions[0];
+    const price = Number(option?.dataset.price ?? 0);
+    const quantity = Math.max(Number(formData.get('quantity')) || 1, 1);
+    const submitButton = createForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    if (isLive) {
+      if (submitButton) submitButton.disabled = true;
+      try {
+        const response = await fetch('/api/admin/orders/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.get('name'),
+            email: formData.get('email'),
+            phone: formData.get('phone'),
+            city: formData.get('city'),
+            address: formData.get('address'),
+            notes: formData.get('notes'),
+            variantId: variantSelect.value,
+            quantity,
+          }),
+        });
+        const data = (await response.json().catch(() => ({}))) as { error?: string; order?: Order };
+
+        if (!response.ok || !data.order) {
+          (window as any).adminToast(data.error || 'No se pudo crear el pedido.', 'warn');
+          return;
+        }
+
+        orders.unshift(data.order);
+        byId.set(data.order.id, data.order);
+        tbody?.insertAdjacentHTML('afterbegin', rowHtml(data.order));
+        createForm.reset();
+        if (quantityInput) quantityInput.value = '1';
+        updateNewTotal();
+        (window as any).closeAdminModal('create-order-modal');
+        updateFilterCounts();
+        applyFilters();
+        (window as any).adminToast(`Pedido ${data.order.number} creado. Pendiente de pago.`);
+      } catch {
+        (window as any).adminToast('No hay conexión con el servidor. Inténtalo de nuevo.', 'warn');
+      } finally {
+        if (submitButton) submitButton.disabled = false;
+      }
+      return;
+    }
+
+    const shipping = 0;
+    const sequence = 1049 + orders.length - 10;
+    const now = new Date().toISOString();
+
+    const order: Order = {
+      id: `ord-${sequence}`,
+      number: `IRIS-0${sequence}`,
+      customer: String(formData.get('name') ?? ''),
+      email: String(formData.get('email') ?? ''),
+      phone: String(formData.get('phone') ?? ''),
+      city: String(formData.get('city') ?? ''),
+      address: String(formData.get('address') ?? ''),
+      status: 'pending',
+      payment: 'pending',
+      total: price * quantity + shipping,
+      shipping,
+      items: [
+        {
+          name: option?.dataset.name ?? 'Producto',
+          size: option?.dataset.size ?? '',
+          quantity,
+          unitPrice: price,
+        },
+      ],
+      createdAt: now,
+      notes: String(formData.get('notes') ?? '') || undefined,
+    };
+
+    orders.unshift(order);
+    byId.set(order.id, order);
+    tbody?.insertAdjacentHTML('afterbegin', rowHtml(order));
+    createForm.reset();
+    if (quantityInput) quantityInput.value = '1';
+    updateNewTotal();
+    (window as any).closeAdminModal('create-order-modal');
+    updateFilterCounts();
+    applyFilters();
+    (window as any).adminToast(`Pedido ${order.number} creado (demo). Pendiente de pago.`);
+  });
+
+  /* ------------------------- Eventos ------------------------- */
+
+  document.querySelectorAll<HTMLSelectElement>('[data-event-status]').forEach((select) => {
+    select.addEventListener('change', () => {
+      (window as any).adminToast(`Solicitud de evento actualizada a “${select.selectedOptions[0]?.textContent?.trim()}” (demo).`);
+    });
+  });
+</script>

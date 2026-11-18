@@ -1,0 +1,278 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import { formatDateTime, REVIEW_STATUS } from '../../lib/admin';
+import { demoReviews } from '../../data/admin-demo';
+import { getReviews } from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const reviews = supabase ? await getReviews(supabase) : demoReviews;
+const average = reviews.length
+  ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+  : 0;
+const pending = reviews.filter((review) => review.status === 'pending').length;
+const approved = reviews.filter((review) => review.status === 'approved').length;
+const replied = reviews.filter((review) => review.reply).length;
+
+const tabs = [
+  { id: 'pending', label: 'Pendientes', count: pending },
+  { id: 'approved', label: 'Publicadas', count: approved },
+  { id: 'rejected', label: 'Rechazadas', count: reviews.filter((review) => review.status === 'rejected').length },
+  { id: 'all', label: 'Todas', count: reviews.length },
+];
+---
+
+<AdminLayout title="Reseñas" section="Reseñas">
+  <PageHeader
+    eyebrow="Comunidad"
+    title="Reseñas"
+    description="Modera las opiniones de la tienda y responde en nombre de Iris. Las reseñas publicadas aparecen en la ficha de cada producto."
+  >
+    <button type="button" slot="actions" class="admin-btn admin-btn-outline" data-request-reviews>
+      <AdminIcon name="mail" size={14} />
+      Solicitar reseñas
+    </button>
+  </PageHeader>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard
+      label="Calificación promedio"
+      value={average.toFixed(1).replace('.', ',')}
+      icon="star"
+      hint={`${reviews.length} reseñas`}
+    />
+    <StatCard label="Por moderar" value={String(pending)} icon="clock" hint="esperando revisión" />
+    <StatCard label="Publicadas" value={String(approved)} icon="check" hint="visibles en la tienda" />
+    <StatCard label="Con respuesta" value={`${replied}/${approved}`} icon="reply" hint="tasa de respuesta" />
+  </section>
+
+  <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+    <div class="admin-tabs flex-1">
+      {
+        tabs.map((tab) => (
+          <button
+            type="button"
+            class:list={['admin-tab', tab.id === 'pending' && 'is-active']}
+            data-review-tab={tab.id}
+          >
+            {tab.label}
+            <span class="ml-1 text-[0.62rem] text-ink/35" data-review-count={tab.id}>{tab.count}</span>
+          </button>
+        ))
+      }
+    </div>
+
+    <div class="flex items-center gap-2 text-[0.68rem] text-ink/45">
+      <AdminIcon name="filter" size={13} />
+      Ordenadas por más recientes
+    </div>
+  </div>
+
+  <section class="mt-4 grid gap-4 lg:grid-cols-2" id="reviews-grid">
+    {
+      reviews.map((review) => {
+        const meta = REVIEW_STATUS[review.status];
+        return (
+          <article
+            class="admin-card flex flex-col p-5"
+            data-review-card={review.id}
+            data-status={review.status}
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-2.5">
+                <span class="admin-avatar">{review.author.slice(0, 2).toUpperCase()}</span>
+                <div>
+                  <p class="text-[0.82rem] font-medium text-jade-900">{review.author}</p>
+                  <p class="text-[0.65rem] text-ink/40">
+                    {review.product}
+                    {review.verified && <span class="ml-1 text-jade-700">· compra verificada</span>}
+                  </p>
+                </div>
+              </div>
+              <span class="admin-badge" data-tone={meta.tone} data-review-status>{meta.label}</span>
+            </div>
+
+            <div class="mt-3 flex items-center gap-2">
+              <span class="admin-stars" aria-label={`${review.rating} de 5 estrellas`}>
+                {'★'.repeat(review.rating)}
+                <span class="text-cream-300">{'★'.repeat(5 - review.rating)}</span>
+              </span>
+              <span class="text-[0.62rem] text-ink/35">{formatDateTime(review.createdAt)}</span>
+            </div>
+
+            <h3 class="mt-2 font-display text-base text-jade-900">{review.title}</h3>
+            <p class="mt-1.5 flex-1 text-[0.78rem] leading-relaxed text-ink/60">{review.body}</p>
+
+            <div
+              class:list={['mt-3 border-l-2 border-jade-700/30 bg-jade-50/60 px-3 py-2', !review.reply && 'hidden']}
+              data-reply-block
+            >
+              <p class="text-[0.58rem] uppercase tracking-[0.14em] text-jade-900/50">Respuesta de Iris</p>
+              <p class="mt-1 text-[0.74rem] leading-relaxed text-ink/60" data-reply-text>{review.reply}</p>
+            </div>
+
+            <form class="mt-3 hidden" data-reply-form>
+              <label class="admin-label" for={`reply-${review.id}`}>Tu respuesta</label>
+              <textarea
+                id={`reply-${review.id}`}
+                rows="2"
+                class="admin-textarea"
+                placeholder="Gracias por contarnos…"
+                required
+              ></textarea>
+              <div class="mt-2 flex justify-end gap-2">
+                <button type="button" class="admin-btn admin-btn-ghost admin-btn-sm" data-reply-cancel>Cancelar</button>
+                <button type="submit" class="admin-btn admin-btn-primary admin-btn-sm">Publicar respuesta</button>
+              </div>
+            </form>
+
+            <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-cream-300 pt-3">
+              {
+                review.status === 'pending' ? (
+                  <>
+                    <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" data-review-action="approve" data-review-id={review.id}>
+                      <AdminIcon name="check" size={13} />
+                      Aprobar
+                    </button>
+                    <button type="button" class="admin-btn admin-btn-danger admin-btn-sm" data-review-action="reject" data-review-id={review.id}>
+                      Rechazar
+                    </button>
+                  </>
+                ) : review.status === 'approved' ? (
+                  <>
+                    <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-reply-toggle>
+                      <AdminIcon name="reply" size={13} />
+                      {review.reply ? 'Editar respuesta' : 'Responder'}
+                    </button>
+                    <button type="button" class="admin-btn admin-btn-ghost admin-btn-sm ml-auto" data-review-action="reject" data-review-id={review.id}>
+                      Ocultar
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-review-action="approve" data-review-id={review.id}>
+                    Volver a publicar
+                  </button>
+                )
+              }
+            </div>
+          </article>
+        );
+      })
+    }
+  </section>
+
+  <div class="admin-empty mt-4 hidden" data-reviews-empty>
+    <AdminIcon name="star" size={24} class="text-cream-300" />
+    <p>No hay reseñas en esta categoría.</p>
+  </div>
+</AdminLayout>
+
+<script>
+  const cards = document.querySelectorAll<HTMLElement>('[data-review-card]');
+  const tabs = document.querySelectorAll<HTMLButtonElement>('[data-review-tab]');
+  const empty = document.querySelector<HTMLElement>('[data-reviews-empty]');
+  let activeTab = 'pending';
+
+  const labels = {
+    pending: { label: 'Pendiente', tone: 'amber' },
+    approved: { label: 'Publicada', tone: 'jade' },
+    rejected: { label: 'Rechazada', tone: 'slate' },
+  } as const;
+
+  function updateCounts() {
+    const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0, all: 0 };
+    cards.forEach((card) => {
+      const status = card.dataset.status ?? 'pending';
+      counts.all += 1;
+      counts[status] = (counts[status] ?? 0) + 1;
+    });
+    Object.entries(counts).forEach(([key, value]) => {
+      const node = document.querySelector<HTMLElement>(`[data-review-count="${key}"]`);
+      if (node) node.textContent = String(value);
+    });
+  }
+
+  function applyFilter() {
+    let visible = 0;
+    cards.forEach((card) => {
+      const show = activeTab === 'all' || card.dataset.status === activeTab;
+      card.classList.toggle('hidden', !show);
+      if (show) visible += 1;
+    });
+    empty?.classList.toggle('hidden', visible > 0);
+  }
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      activeTab = tab.dataset.reviewTab ?? 'pending';
+      tabs.forEach((item) => item.classList.toggle('is-active', item === tab));
+      applyFilter();
+    });
+  });
+
+  document.getElementById('reviews-grid')?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const card = target.closest<HTMLElement>('[data-review-card]');
+    if (!card) return;
+
+    const action = target.closest<HTMLButtonElement>('[data-review-action]');
+    if (action) {
+      const status = action.dataset.reviewAction === 'approve' ? 'approved' : 'rejected';
+      card.dataset.status = status;
+      const badge = card.querySelector<HTMLElement>('[data-review-status]');
+      if (badge) {
+        badge.textContent = labels[status].label;
+        badge.dataset.tone = labels[status].tone;
+      }
+      applyFilter();
+      updateCounts();
+      (window as any).adminToast(
+        status === 'approved' ? 'Reseña publicada en la tienda (demo).' : 'Reseña ocultada de la tienda (demo).',
+        status === 'approved' ? 'ok' : 'warn',
+      );
+      return;
+    }
+
+    const toggle = target.closest<HTMLButtonElement>('[data-reply-toggle]');
+    if (toggle) {
+      const form = card.querySelector<HTMLFormElement>('[data-reply-form]');
+      form?.classList.toggle('hidden');
+      form?.querySelector('textarea')?.focus();
+      return;
+    }
+
+    if (target.closest('[data-reply-cancel]')) {
+      card.querySelector<HTMLFormElement>('[data-reply-form]')?.classList.add('hidden');
+    }
+  });
+
+  document.querySelectorAll<HTMLFormElement>('[data-reply-form]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const card = form.closest<HTMLElement>('[data-review-card]');
+      const textarea = form.querySelector('textarea');
+      const value = textarea?.value.trim() ?? '';
+      if (!card || !value) return;
+
+      const block = card.querySelector<HTMLElement>('[data-reply-block]');
+      const text = card.querySelector<HTMLElement>('[data-reply-text]');
+      if (text) text.textContent = value;
+      block?.classList.remove('hidden');
+      form.classList.add('hidden');
+      if (textarea) textarea.value = '';
+      (window as any).adminToast('Respuesta publicada (demo).');
+    });
+  });
+
+  document.querySelector('[data-request-reviews]')?.addEventListener('click', () => {
+    (window as any).adminToast('Solicitud de reseña enviada a los pedidos entregados (demo).');
+  });
+
+  applyFilter();
+  updateCounts();
+</script>

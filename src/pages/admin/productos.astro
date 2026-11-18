@@ -1,0 +1,642 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import { formatCOP, formatCompactCOP } from '../../lib/admin';
+import { demoProducts } from '../../data/admin-demo';
+import { getProducts } from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const products = supabase ? await getProducts(supabase) : demoProducts;
+
+const variants = products.flatMap((product) => product.variants);
+const inventoryValue = variants.reduce((sum, variant) => sum + variant.price * variant.stock, 0);
+const lowStock = variants.filter((variant) => variant.stock <= 5).length;
+const collections = ['Otoño Dorado', 'Esencia del Valle', 'Loto Esmeralda', 'Luz Serena'];
+const families = ['floral', 'amaderado', 'gourmand', 'citrico', 'fresco', 'especiado', 'frutal'];
+
+const accents: Record<string, string> = {
+  'otono-dorado': '#B85E37',
+  'esencia-del-valle': '#0E6B52',
+  'loto-esmeralda': '#D9917F',
+  'luz-serena': '#8F4526',
+};
+
+const swatch = (product: (typeof products)[number]) => accents[product.slug] ?? '#064B3B';
+---
+
+<AdminLayout title="Productos" section="Productos">
+  <PageHeader
+    eyebrow="Catálogo"
+    title="Productos"
+    description="Crea, edita y archiva las velas de la tienda. Cada aroma tiene dos tamaños con precio y stock propios."
+  >
+    <a href="/tienda" slot="actions" target="_blank" rel="noopener" class="admin-btn admin-btn-outline">
+      Ver catálogo
+      <AdminIcon name="external" size={13} />
+    </a>
+    <button type="button" slot="actions" class="admin-btn admin-btn-primary" data-new-product>
+      <AdminIcon name="plus" size={15} />
+      Nuevo producto
+    </button>
+  </PageHeader>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard label="Productos activos" value={String(products.filter((p) => p.status === 'active').length)} icon="tag" hint="4 colecciones" />
+    <StatCard label="Variantes" value={String(variants.length)} icon="box" hint="120 g y 220 g" />
+    <StatCard label="Valor del inventario" value={formatCompactCOP(inventoryValue)} icon="coins" hint="a precio de venta" />
+    <StatCard label="Stock bajo" value={String(lowStock)} icon="alert" hint="5 unidades o menos" />
+  </section>
+
+  <section class="admin-card mt-5">
+    <div class="admin-card-head gap-3">
+      <div class="relative w-full sm:max-w-xs">
+        <AdminIcon name="search" size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/35" />
+        <input
+          type="search"
+          id="product-search"
+          class="admin-input pl-9"
+          placeholder="Buscar por nombre o aroma…"
+          aria-label="Buscar productos"
+        />
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button type="button" class="admin-chip is-active" data-product-filter="all">
+          Todas
+          <span class="count">{products.length}</span>
+        </button>
+        {
+          collections.map((collection) => (
+            <button type="button" class="admin-chip" data-product-filter={collection}>
+              {collection}
+              <span class="count">{products.filter((product) => product.collection === collection).length}</span>
+            </button>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Colección</th>
+            <th>Variantes</th>
+            <th class="num">Desde</th>
+            <th>Estado</th>
+            <th class="text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="products-body">
+          {
+            products.map((product) => {
+              const minPrice = Math.min(...product.variants.map((variant) => variant.price));
+              return (
+                <tr data-product-row={product.id} data-collection={product.collection}>
+                  <td>
+                    <div class="flex items-center gap-3">
+                      <span
+                        class="grid h-10 w-10 shrink-0 place-items-center rounded-xs border border-cream-300 font-display text-sm text-cream-50"
+                        style={`background:${swatch(product)}`}
+                      >
+                        {product.name.slice(0, 1)}
+                      </span>
+                      <div>
+                        <p class="font-medium text-jade-900" data-product-name>{product.name}</p>
+                        <p class="text-[0.68rem] text-ink/45">
+                          <span data-product-aroma>{product.aroma}</span> · {product.family}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="text-ink/60" data-product-collection>{product.collection}</td>
+                  <td>
+                    <div class="space-y-1" data-product-variants>
+                      {
+                        product.variants.map((variant) => (
+                          <div class="flex items-center gap-2 text-[0.7rem]">
+                            <span class="w-12 text-ink/55">{variant.size}</span>
+                            <span class="text-ink/70">{formatCOP(variant.price)}</span>
+                            <span
+                              class:list={[
+                                'admin-badge',
+                                variant.stock <= 5 ? 'text-rose-700' : 'text-jade-700',
+                              ]}
+                              data-tone={variant.stock <= 5 ? 'rose' : 'jade'}
+                            >
+                              {variant.stock} u.
+                            </span>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </td>
+                  <td class="num font-medium text-jade-900" data-product-price>{formatCOP(minPrice)}</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class:list={['admin-switch', product.status === 'active' && 'is-on']}
+                        data-toggle-product={product.id}
+                        role="switch"
+                        aria-checked={product.status === 'active'}
+                        aria-label={`Activar o desactivar ${product.name}`}
+                      ></button>
+                      <span class="text-[0.7rem] text-ink/50" data-product-status-label>
+                        {product.status === 'active' ? 'Activo' : 'Borrador'}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="flex items-center justify-end gap-1">
+                      <a
+                        href={`/producto/${product.slug}`}
+                        target="_blank"
+                        rel="noopener"
+                        class="admin-icon-btn"
+                        title="Ver en la tienda"
+                        aria-label={`Ver ${product.name} en la tienda`}
+                      >
+                        <AdminIcon name="eye" size={15} />
+                      </a>
+                      <button
+                        type="button"
+                        class="admin-icon-btn"
+                        data-edit-product={product.id}
+                        title="Editar"
+                        aria-label={`Editar ${product.name}`}
+                      >
+                        <AdminIcon name="edit" size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700"
+                        data-delete-product={product.id}
+                        title="Eliminar"
+                        aria-label={`Eliminar ${product.name}`}
+                      >
+                        <AdminIcon name="trash" size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-cream-300 px-4 py-3 text-[0.68rem] text-ink/45">
+      <span data-products-count>Mostrando {products.length} productos</span>
+      <span>Los cambios de precio se reflejan al publicar.</span>
+    </div>
+  </section>
+
+  <section class="mt-5 grid gap-5 lg:grid-cols-2">
+    <div class="admin-card p-5">
+      <div class="flex items-start gap-3">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xs bg-jade-50 text-jade-800">
+          <AdminIcon name="sparkles" size={17} />
+        </span>
+        <div>
+          <h2 class="admin-card-title">Fotografía del catálogo</h2>
+          <p class="mt-1 text-[0.75rem] leading-relaxed text-ink/55">
+            Las cuatro colecciones aún usan ilustraciones de referencia. Cuando tengas las fotos de
+            estudio, súbelas a <code class="text-jade-900">product-images</code> en Supabase Storage.
+          </p>
+          <button type="button" class="admin-btn admin-btn-outline admin-btn-sm mt-3" data-photo-info>
+            Ver requisitos de imagen
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-card p-5">
+      <div class="flex items-start gap-3">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xs bg-terracotta-600/10 text-terracotta-700">
+          <AdminIcon name="coins" size={17} />
+        </span>
+        <div>
+          <h2 class="admin-card-title">Precios pendientes</h2>
+          <p class="mt-1 text-[0.75rem] leading-relaxed text-ink/55">
+            Los precios de esta demo son provisionales. Define el precio final por tamaño
+            (con IVA incluido) antes de publicar la tienda.
+          </p>
+          <p class="mt-2 text-[0.65rem] uppercase tracking-[0.12em] text-terracotta-700">
+            120 g · 220 g · margen sugerido 60%
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modal producto -->
+  <div id="product-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
+    <form id="product-form" class="admin-modal-panel is-wide">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Catálogo</p>
+          <h2 id="product-modal-title" class="admin-card-title mt-1">Nuevo producto</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="product-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+
+      <div class="admin-modal-body">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="admin-label" for="product-name">Nombre</label>
+            <input id="product-name" data-field="name" required class="admin-input" placeholder="Otoño Dorado" />
+          </div>
+          <div>
+            <label class="admin-label" for="product-aroma">Aroma</label>
+            <input id="product-aroma" data-field="aroma" required class="admin-input" placeholder="Manzana & Canela" />
+          </div>
+          <div>
+            <label class="admin-label" for="product-collection">Colección</label>
+            <select id="product-collection" data-field="collection" class="admin-select">
+              {collections.map((collection) => <option value={collection}>{collection}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="admin-label" for="product-family">Familia olfativa</label>
+            <select id="product-family" data-field="family" class="admin-select">
+              {families.map((family) => <option value={family}>{family}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="admin-label" for="product-intensity">Intensidad (1–5)</label>
+            <input id="product-intensity" data-field="intensity" type="number" min="1" max="5" class="admin-input" value="3" />
+          </div>
+          <div>
+            <label class="admin-label" for="product-status">Estado</label>
+            <select id="product-status" data-field="status" class="admin-select">
+              <option value="active">Activo</option>
+              <option value="draft">Borrador</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="admin-label" for="product-description">Descripción corta</label>
+            <textarea id="product-description" data-field="description" rows="2" class="admin-textarea" placeholder="Lo que se siente al encenderla…"></textarea>
+          </div>
+        </div>
+
+        <div class="mt-5">
+          <div class="flex items-center justify-between">
+            <p class="admin-label mb-0">Tamaños y stock</p>
+            <span class="text-[0.62rem] text-ink/40">SKU único · precio en COP con IVA</span>
+          </div>
+
+          <div class="mt-2 space-y-3">
+            {
+              [0, 1].map((index) => (
+                <div class="grid gap-2 border border-cream-300 bg-cream-50 p-3 sm:grid-cols-6">
+                  <div class="sm:col-span-1">
+                    <label class="text-[0.58rem] uppercase tracking-[0.1em] text-ink/40">Tamaño</label>
+                    <input data-variant={index} data-key="size" class="admin-input mt-1 py-1.5" placeholder={index === 0 ? '120 g' : '220 g'} />
+                  </div>
+                  <div>
+                    <label class="text-[0.58rem] uppercase tracking-[0.1em] text-ink/40">Peso (g)</label>
+                    <input data-variant={index} data-key="weight" type="number" min="1" class="admin-input mt-1 py-1.5" placeholder={index === 0 ? '120' : '220'} />
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label class="text-[0.58rem] uppercase tracking-[0.1em] text-ink/40">SKU</label>
+                    <input data-variant={index} data-key="sku" class="admin-input mt-1 py-1.5" placeholder={index === 0 ? 'IRIS-XXX-120' : 'IRIS-XXX-220'} />
+                  </div>
+                  <div>
+                    <label class="text-[0.58rem] uppercase tracking-[0.1em] text-ink/40">Precio</label>
+                    <input data-variant={index} data-key="price" type="number" min="0" step="1000" class="admin-input mt-1 py-1.5" placeholder="89000" />
+                  </div>
+                  <div>
+                    <label class="text-[0.58rem] uppercase tracking-[0.1em] text-ink/40">Stock</label>
+                    <input data-variant={index} data-key="stock" type="number" min="0" class="admin-input mt-1 py-1.5" placeholder="0" />
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="product-modal">Cancelar</button>
+        <button type="submit" class="admin-btn admin-btn-primary" data-save-product>Guardar producto</button>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script type="application/json" id="products-data" set:html={JSON.stringify(products)}></script>
+
+<script>
+  import { formatCOP } from '../../lib/admin';
+
+  type Variant = { id: string; size: string; weight: number; sku: string; price: number; cost: number; stock: number };
+  type Product = {
+    id: string;
+    slug: string;
+    name: string;
+    aroma: string;
+    collection: string;
+    family: string;
+    intensity: number;
+    status: string;
+    variants: Variant[];
+    description: string;
+  };
+
+  const dataNode = document.getElementById('products-data');
+  const products: Product[] = dataNode ? JSON.parse(dataNode.textContent ?? '[]') : [];
+  const byId = new Map(products.map((product) => [product.id, product]));
+
+  const tbody = document.getElementById('products-body');
+  const search = document.getElementById('product-search') as HTMLInputElement | null;
+  const countLabel = document.querySelector<HTMLElement>('[data-products-count]');
+  const chips = document.querySelectorAll<HTMLButtonElement>('[data-product-filter]');
+  const form = document.getElementById('product-form') as HTMLFormElement | null;
+  const modalTitle = document.getElementById('product-modal-title');
+  const saveButton = document.querySelector<HTMLButtonElement>('[data-save-product]');
+
+  const accents: Record<string, string> = {
+    'otono-dorado': '#B85E37',
+    'esencia-del-valle': '#0E6B52',
+    'loto-esmeralda': '#D9917F',
+    'luz-serena': '#8F4526',
+  };
+
+  const collectionSlug: Record<string, string> = {
+    'Otoño Dorado': 'otono-dorado',
+    'Esencia del Valle': 'esencia-del-valle',
+    'Loto Esmeralda': 'loto-esmeralda',
+    'Luz Serena': 'luz-serena',
+  };
+
+  let activeFilter = 'all';
+  let editingId: string | null = null;
+
+  const escapeHtml = (value: string): string =>
+    value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
+
+  function applyFilters() {
+    if (!tbody) return;
+    const term = (search?.value ?? '').trim().toLowerCase();
+    let visible = 0;
+
+    tbody.querySelectorAll<HTMLTableRowElement>('tr[data-product-row]').forEach((row) => {
+      const product = byId.get(row.dataset.productRow ?? '');
+      const matchesCollection = activeFilter === 'all' || product?.collection === activeFilter;
+      const haystack = `${product?.name} ${product?.aroma} ${product?.collection}`.toLowerCase();
+      const matchesSearch = term === '' || haystack.includes(term);
+      const show = matchesCollection && matchesSearch;
+      row.classList.toggle('hidden', !show);
+      if (show) visible += 1;
+    });
+
+    if (countLabel) {
+      countLabel.textContent =
+        visible === 1 ? 'Mostrando 1 producto' : `Mostrando ${visible} de ${products.length} productos`;
+    }
+  }
+
+  function variantCellHtml(product: Product): string {
+    return product.variants
+      .map(
+        (variant) => `
+        <div class="flex items-center gap-2 text-[0.7rem]">
+          <span class="w-12 text-ink/55">${escapeHtml(variant.size)}</span>
+          <span class="text-ink/70">${formatCOP(variant.price)}</span>
+          <span class="admin-badge" data-tone="${variant.stock <= 5 ? 'rose' : 'jade'}">${variant.stock} u.</span>
+        </div>`,
+      )
+      .join('');
+  }
+
+  function rowHtml(product: Product): string {
+    const minPrice = Math.min(...product.variants.map((variant) => variant.price));
+    const slug = collectionSlug[product.collection] ?? product.slug;
+    const accent = accents[slug] ?? '#064B3B';
+
+    return `
+      <tr data-product-row="${product.id}" data-collection="${escapeHtml(product.collection)}">
+        <td>
+          <div class="flex items-center gap-3">
+            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xs border border-cream-300 font-display text-sm text-cream-50" style="background:${accent}">
+              ${escapeHtml(product.name.slice(0, 1))}
+            </span>
+            <div>
+              <p class="font-medium text-jade-900" data-product-name>${escapeHtml(product.name)}</p>
+              <p class="text-[0.68rem] text-ink/45"><span data-product-aroma>${escapeHtml(product.aroma)}</span> · ${escapeHtml(product.family)}</p>
+            </div>
+          </div>
+        </td>
+        <td class="text-ink/60" data-product-collection>${escapeHtml(product.collection)}</td>
+        <td><div class="space-y-1" data-product-variants>${variantCellHtml(product)}</div></td>
+        <td class="num font-medium text-jade-900" data-product-price>${formatCOP(minPrice)}</td>
+        <td>
+          <div class="flex items-center gap-2">
+            <button type="button" class="admin-switch ${product.status === 'active' ? 'is-on' : ''}" data-toggle-product="${product.id}" role="switch" aria-checked="${product.status === 'active'}" aria-label="Activar o desactivar ${escapeHtml(product.name)}"></button>
+            <span class="text-[0.7rem] text-ink/50" data-product-status-label>${product.status === 'active' ? 'Activo' : 'Borrador'}</span>
+          </div>
+        </td>
+        <td>
+          <div class="flex items-center justify-end gap-1">
+            <a href="/producto/${slug}" target="_blank" rel="noopener" class="admin-icon-btn" title="Ver en la tienda" aria-label="Ver en la tienda">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </a>
+            <button type="button" class="admin-icon-btn" data-edit-product="${product.id}" title="Editar" aria-label="Editar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+            </button>
+            <button type="button" class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700" data-delete-product="${product.id}" title="Eliminar" aria-label="Eliminar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function field(name: string): HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null {
+    return form?.querySelector(`[data-field="${name}"]`) as HTMLInputElement | null;
+  }
+
+  function variantField(index: number, key: string): HTMLInputElement | null {
+    return form?.querySelector(`[data-variant="${index}"][data-key="${key}"]`) as HTMLInputElement | null;
+  }
+
+  function openProductModal(product?: Product) {
+    if (!form) return;
+    editingId = product?.id ?? null;
+    if (modalTitle) modalTitle.textContent = product ? `Editar ${product.name}` : 'Nuevo producto';
+    if (saveButton) saveButton.textContent = product ? 'Guardar cambios' : 'Crear producto';
+
+    const values: Record<string, string> = {
+      name: product?.name ?? '',
+      aroma: product?.aroma ?? '',
+      collection: product?.collection ?? 'Otoño Dorado',
+      family: product?.family.split(' · ')[0]?.toLowerCase() ?? 'gourmand',
+      intensity: String(product?.intensity ?? 3),
+      status: product?.status ?? 'active',
+      description: product?.description ?? '',
+    };
+
+    Object.entries(values).forEach(([key, value]) => {
+      const input = field(key);
+      if (input) input.value = value;
+    });
+
+    [0, 1].forEach((index) => {
+      const variant = product?.variants[index];
+      (['size', 'weight', 'sku', 'price', 'stock'] as const).forEach((key) => {
+        const input = variantField(index, key);
+        if (input) input.value = variant ? String(variant[key]) : '';
+      });
+    });
+
+    (window as any).openAdminModal('product-modal');
+  }
+
+  function readForm(): Product | null {
+    if (!form) return null;
+    const name = field('name')?.value.trim() ?? '';
+    const aroma = field('aroma')?.value.trim() ?? '';
+    if (!name || !aroma) return null;
+
+    const collection = field('collection')?.value ?? 'Otoño Dorado';
+    const familyValue = field('family')?.value ?? 'gourmand';
+
+    const variants: Variant[] = [0, 1]
+      .map((index) => {
+        const size = variantField(index, 'size')?.value.trim() ?? '';
+        const price = Number(variantField(index, 'price')?.value ?? 0);
+        const stock = Number(variantField(index, 'stock')?.value ?? 0);
+        if (!size || !price) return null;
+        return {
+          id: `${editingId ?? 'new'}-${index}`,
+          size,
+          weight: Number(variantField(index, 'weight')?.value ?? 0),
+          sku: variantField(index, 'sku')?.value.trim() ?? '',
+          price,
+          cost: Math.round(price * 0.4),
+          stock,
+        };
+      })
+      .filter((variant): variant is Variant => variant !== null);
+
+    if (variants.length === 0) return null;
+
+    return {
+      id: editingId ?? `prod-${Date.now()}`,
+      slug: collectionSlug[collection] ?? 'nuevo-producto',
+      name,
+      aroma,
+      collection,
+      family: familyValue,
+      intensity: Number(field('intensity')?.value ?? 3),
+      status: field('status')?.value ?? 'active',
+      variants,
+      description: field('description')?.value ?? '',
+    };
+  }
+
+  tbody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+
+    const toggle = target.closest<HTMLButtonElement>('[data-toggle-product]');
+    if (toggle) {
+      const product = byId.get(toggle.dataset.toggleProduct ?? '');
+      if (!product) return;
+      product.status = product.status === 'active' ? 'draft' : 'active';
+      toggle.classList.toggle('is-on', product.status === 'active');
+      toggle.setAttribute('aria-checked', String(product.status === 'active'));
+      const label = toggle.parentElement?.querySelector<HTMLElement>('[data-product-status-label]');
+      if (label) label.textContent = product.status === 'active' ? 'Activo' : 'Borrador';
+      (window as any).adminToast(`${product.name} ${product.status === 'active' ? 'activado' : 'pasado a borrador'} (demo).`);
+      return;
+    }
+
+    const edit = target.closest<HTMLButtonElement>('[data-edit-product]');
+    if (edit) {
+      const product = byId.get(edit.dataset.editProduct ?? '');
+      if (product) openProductModal(product);
+      return;
+    }
+
+    const remove = target.closest<HTMLButtonElement>('[data-delete-product]');
+    if (remove) {
+      const product = byId.get(remove.dataset.deleteProduct ?? '');
+      if (!product) return;
+      if (!window.confirm(`¿Eliminar “${product.name}”? Se archivará y dejará de verse en la tienda.`)) return;
+      byId.delete(product.id);
+      const index = products.findIndex((item) => item.id === product.id);
+      if (index >= 0) products.splice(index, 1);
+      tbody?.querySelector(`tr[data-product-row="${product.id}"]`)?.remove();
+      applyFilters();
+      (window as any).adminToast(`${product.name} eliminado del catálogo (demo).`, 'warn');
+    }
+  });
+
+  search?.addEventListener('input', applyFilters);
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      activeFilter = chip.dataset.productFilter ?? 'all';
+      chips.forEach((item) => item.classList.toggle('is-active', item === chip));
+      applyFilters();
+    });
+  });
+
+  document.querySelector('[data-new-product]')?.addEventListener('click', () => openProductModal());
+
+  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.closeModal;
+      if (id) (window as any).closeAdminModal(id);
+    });
+  });
+
+  document.querySelector('[data-photo-info]')?.addEventListener('click', () => {
+    (window as any).adminToast('Sube JPG o WebP de 1600 × 2000 px, fondo neutro y menos de 2 MB.');
+  });
+
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const product = readForm();
+    if (!product) {
+      (window as any).adminToast('Completa nombre, aroma y al menos un tamaño con precio.', 'warn');
+      return;
+    }
+
+    const existing = editingId ? byId.get(editingId) : null;
+
+    if (existing) {
+      Object.assign(existing, product);
+      const row = tbody?.querySelector<HTMLTableRowElement>(`tr[data-product-row="${existing.id}"]`);
+      if (row) {
+        row.dataset.collection = existing.collection;
+        row.querySelector('[data-product-name]')!.textContent = existing.name;
+        row.querySelector('[data-product-aroma]')!.textContent = existing.aroma;
+        row.querySelector('[data-product-collection]')!.textContent = existing.collection;
+        row.querySelector('[data-product-variants]')!.innerHTML = variantCellHtml(existing);
+        row.querySelector('[data-product-price]')!.textContent = formatCOP(
+          Math.min(...existing.variants.map((variant) => variant.price)),
+        );
+      }
+      (window as any).adminToast(`${existing.name} actualizado (demo).`);
+    } else {
+      products.push(product);
+      byId.set(product.id, product);
+      tbody?.insertAdjacentHTML('afterbegin', rowHtml(product));
+      (window as any).adminToast(`${product.name} creado (demo).`);
+    }
+
+    (window as any).closeAdminModal('product-modal');
+    applyFilters();
+  });
+</script>

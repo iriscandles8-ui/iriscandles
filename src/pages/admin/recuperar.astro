@@ -1,0 +1,220 @@
+---
+import '@fontsource/cinzel/400.css';
+import '@fontsource/cinzel/600.css';
+import '@fontsource/poppins/300.css';
+import '@fontsource/poppins/400.css';
+import '@fontsource/poppins/500.css';
+import '@fontsource/poppins/600.css';
+import '../../styles/global.css';
+import '../../styles/admin.css';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+---
+
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cambiar contraseña · Iris Candles</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#032e24" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+
+  <body class="admin-body">
+    <main class="grid min-h-screen place-items-center px-5 py-12">
+      <div class="w-full max-w-sm">
+        <a href="/" class="mb-10 inline-flex items-center gap-2.5">
+          <img src="/brand/logo-iris-candles.svg" alt="Iris Candles" class="h-11 w-11 object-contain" />
+          <span class="font-display text-sm tracking-[0.16em] text-jade-900">IRIS CANDLES</span>
+        </a>
+
+        <p class="text-[0.6rem] font-medium uppercase tracking-[0.2em] text-terracotta-700">
+          Acceso privado
+        </p>
+        <h1 class="mt-3 font-display text-3xl text-jade-900">Cambiar contraseña</h1>
+        <p class="mt-3 text-sm leading-relaxed text-ink/60">
+          Elige una contraseña nueva para tu cuenta del panel. Usa al menos 8 caracteres.
+        </p>
+
+        <div
+          data-error
+          class="mt-6 hidden items-start gap-2 border border-rose-200 bg-rose-50 p-3 text-[0.72rem] leading-relaxed text-rose-800"
+        >
+          <AdminIcon name="alert" size={15} class="mt-0.5 shrink-0" />
+          <p data-error-text></p>
+        </div>
+
+        <div
+          data-success
+          class="mt-6 hidden items-start gap-2 border border-emerald-200 bg-emerald-50 p-3 text-[0.72rem] leading-relaxed text-emerald-800"
+        >
+          <AdminIcon name="check" size={15} class="mt-0.5 shrink-0" />
+          <p data-success-text></p>
+        </div>
+
+        <form id="password-form" class="mt-6 space-y-4" novalidate>
+          <div>
+            <label class="admin-label" for="new-password">Contraseña nueva</label>
+            <input
+              id="new-password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+              class="admin-input"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div>
+            <label class="admin-label" for="confirm-password">Repite la contraseña</label>
+            <input
+              id="confirm-password"
+              name="confirm"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+              class="admin-input"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button type="submit" class="admin-btn admin-btn-primary w-full py-3" data-submit>
+            Guardar contraseña
+          </button>
+        </form>
+
+        <p data-status role="status" aria-live="polite" class="mt-3 text-center text-[0.7rem] text-ink/50"></p>
+
+        <div class="mt-8 flex items-center justify-between text-[0.7rem]">
+          <a href="/admin" class="text-jade-900/70 underline-offset-2 hover:text-jade-900 hover:underline">
+            Volver al panel
+          </a>
+          <a href="/admin/login" class="text-jade-900/70 underline-offset-2 hover:text-jade-900 hover:underline">
+            Ir al acceso
+          </a>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      import { supabase } from '../../lib/supabase';
+
+      const form = document.getElementById('password-form') as HTMLFormElement | null;
+      const passwordInput = document.getElementById('new-password') as HTMLInputElement | null;
+      const confirmInput = document.getElementById('confirm-password') as HTMLInputElement | null;
+      const errorBox = document.querySelector<HTMLElement>('[data-error]');
+      const errorText = document.querySelector<HTMLElement>('[data-error-text]');
+      const successBox = document.querySelector<HTMLElement>('[data-success]');
+      const successText = document.querySelector<HTMLElement>('[data-success-text]');
+      const status = document.querySelector<HTMLElement>('[data-status]');
+      const submit = document.querySelector<HTMLButtonElement>('[data-submit]');
+
+      const params = new URLSearchParams(window.location.search);
+      const hasRecoveryLink = params.has('code') || window.location.hash.includes('access_token');
+
+      function showError(message: string) {
+        if (!errorBox || !errorText) return;
+        errorText.textContent = message;
+        errorBox.classList.remove('hidden');
+        errorBox.classList.add('flex');
+      }
+
+      function showSuccess(message: string) {
+        if (!successBox || !successText) return;
+        successText.textContent = message;
+        successBox.classList.remove('hidden');
+        successBox.classList.add('flex');
+      }
+
+      function translateError(message: string): string {
+        if (message.includes('should be different')) {
+          return 'La contraseña nueva debe ser distinta a la actual.';
+        }
+        if (message.toLowerCase().includes('at least')) {
+          return 'La contraseña debe tener al menos 6 caracteres.';
+        }
+        if (message.toLowerCase().includes('session')) {
+          return 'Tu sesión expiró. Vuelve a iniciar sesión e inténtalo de nuevo.';
+        }
+        return 'No pudimos guardar la contraseña. Inténtalo de nuevo.';
+      }
+
+      async function waitForSession(): Promise<boolean> {
+        if (!supabase) return false;
+
+        const { data } = await supabase.auth.getSession();
+        if (data.session) return true;
+        if (!hasRecoveryLink) return false;
+
+        for (let attempt = 0; attempt < 25; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 120));
+          const { data: retry } = await supabase.auth.getSession();
+          if (retry.session) return true;
+        }
+        return false;
+      }
+
+      const ready = await waitForSession();
+
+      if (ready) {
+        window.history.replaceState({}, '', '/admin/recuperar');
+      } else {
+        showError(
+          'El enlace expiró o no es válido. Inicia sesión y vuelve a entrar a esta página para cambiar tu contraseña.',
+        );
+        if (submit) submit.disabled = true;
+        if (status) status.textContent = 'Necesitas una sesión activa para cambiar la contraseña.';
+      }
+
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorBox?.classList.add('hidden');
+        errorBox?.classList.remove('flex');
+        successBox?.classList.add('hidden');
+        successBox?.classList.remove('flex');
+
+        const password = passwordInput?.value ?? '';
+        const confirmation = confirmInput?.value ?? '';
+
+        if (password.length < 8) {
+          showError('Usa al menos 8 caracteres para la contraseña nueva.');
+          return;
+        }
+
+        if (password !== confirmation) {
+          showError('Las dos contraseñas no coinciden.');
+          return;
+        }
+
+        if (!supabase) {
+          showError('Supabase no está configurado en este entorno.');
+          return;
+        }
+
+        if (submit) {
+          submit.disabled = true;
+          submit.textContent = 'Guardando…';
+        }
+
+        const { error } = await supabase.auth.updateUser({ password });
+
+        if (error) {
+          showError(translateError(error.message));
+          if (submit) {
+            submit.disabled = false;
+            submit.textContent = 'Guardar contraseña';
+          }
+          return;
+        }
+
+        showSuccess('Contraseña actualizada. Te llevamos al panel…');
+        if (status) status.textContent = '';
+        window.setTimeout(() => window.location.replace('/admin'), 1200);
+      });
+    </script>
+  </body>
+</html>

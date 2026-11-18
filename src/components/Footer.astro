@@ -1,0 +1,115 @@
+---
+import { socialLinks } from '../data/social';
+import SocialIcon from './SocialIcon.astro';
+
+const year = new Date().getFullYear();
+
+const columns = [
+  {
+    title: 'Explorar',
+    links: [
+      { href: '/tienda', label: 'Tienda' },
+      { href: '/#colecciones', label: 'Colecciones' },
+      { href: '/encuentra-tu-aroma', label: 'Encuentra tu aroma' },
+      { href: '/eventos', label: 'Eventos y empresas' },
+    ],
+  },
+  {
+    title: 'Ayuda',
+    links: [
+      { href: '/legales#envios', label: 'Envíos y devoluciones' },
+      { href: '/legales#faq', label: 'Preguntas frecuentes' },
+      { href: '/legales#privacidad', label: 'Privacidad' },
+      { href: '/legales#terminos', label: 'Términos' },
+    ],
+  },
+];
+---
+
+<footer class="border-t border-cream-300 bg-cream-100/60">
+  <div class="container-iris grid gap-12 py-14 lg:grid-cols-12 lg:py-20">
+    <div class="lg:col-span-5">
+      <a href="/" class="inline-flex items-center gap-3" aria-label="Iris Candles, ir al inicio">
+        <img
+          src="/brand/logo-iris-candles.svg"
+          alt=""
+          width="52"
+          height="52"
+          class="h-13 w-13 object-contain"
+        />
+        <span class="font-display text-base tracking-[0.18em] text-jade-900">IRIS CANDLES</span>
+      </a>
+      <p class="mt-5 max-w-sm text-sm leading-relaxed text-ink/70">
+        Velas artesanales vertidas en pequeños lotes. Cuatro paisajes olfativos para habitar
+        la casa con calma.
+      </p>
+      <p class="mt-6 text-xs uppercase tracking-[0.16em] text-jade-900/80">
+        Bogotá · Colombia
+      </p>
+    </div>
+
+    {
+      columns.map((column) => (
+        <div class="lg:col-span-2">
+          <h3 class="text-[0.7rem] font-medium uppercase tracking-[0.18em] text-terracotta-700">
+            {column.title}
+          </h3>
+          <ul class="mt-4 space-y-2.5">
+            {column.links.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="text-sm text-ink/70 transition-colors hover:text-jade-900"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+
+    <div class="lg:col-span-3">
+      <h3 class="text-[0.7rem] font-medium uppercase tracking-[0.18em] text-terracotta-700">
+        Contacto
+      </h3>
+      <ul class="mt-4 space-y-3 text-sm text-ink/70">
+        <li>
+          <a href="mailto:hola@iriscandles.com" class="transition-colors hover:text-jade-900">
+            hola@iriscandles.com
+          </a>
+        </li>
+        {
+          socialLinks.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="group inline-flex items-center gap-2.5 transition-colors hover:text-jade-900"
+              >
+                <span class="flex h-7 w-7 items-center justify-center rounded-full border border-cream-300 bg-cream-50 text-jade-900 transition-colors duration-300 group-hover:border-jade-900 group-hover:bg-jade-900 group-hover:text-cream-50">
+                  <SocialIcon name={link.key} class="h-3.5 w-3.5" />
+                </span>
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-6 text-[0.7rem] uppercase tracking-[0.14em] text-jade-900/80">
+        Nequi · Daviplata · Transferencia
+      </p>
+    </div>
+  </div>
+
+  <div class="border-t border-cream-300">
+    <div
+      class="container-iris flex flex-col items-center justify-between gap-3 py-5 text-[0.68rem] uppercase tracking-[0.14em] text-jade-900/80 sm:flex-row"
+    >
+      <p>© {year} Iris Candles. Todos los derechos reservados.</p>
+      <p>Hecho con calma en Colombia</p>
+    </div>
+  </div>
+</footer>

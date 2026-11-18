@@ -1,0 +1,393 @@
+-- ============================================================
+-- Iris Candles · Panel de administración
+-- Ejecutar DESPUÉS de db/schema.sql, en Supabase -> SQL Editor.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 1. PERSONAL AUTORIZADO Y PERMISOS
+-- ------------------------------------------------------------
+create table if not exists admin_users (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  role        text not null default 'manager' check (role in ('owner','admin','manager','viewer')),
+  permissions jsonb not null default '{}'::jsonb,
+  is_active   boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+create or replace function public.is_staff()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from admin_users
+    where user_id = auth.uid() and is_active
+  );
+$$;
+
+create or replace function public.is_owner()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from admin_users
+    where user_id = auth.uid() and is_active and role in ('owner','admin')
+  );
+$$;
+
+create or replace function public.has_permission(p_module text, p_action text default 'read')
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from admin_users
+    where user_id = auth.uid()
+      and is_active
+      and (
+        role in ('owner','admin')
+        or coalesce((permissions -> p_module ->> p_action)::boolean, false)
+      )
+  );
+$$;
+
+-- ------------------------------------------------------------
+-- 2. COLUMNAS NUEVAS
+-- ------------------------------------------------------------
+alter table profiles add column if not exists email text;
+alter table profiles add column if not exists birth_date date;
+alter table profiles add column if not exists last_seen_at timestamptz;
+
+alter table orders add column if not exists internal_notes text;
+alter table orders add column if not exists accepted_at timestamptz;
+alter table orders add column if not exists shipped_at timestamptz;
+alter table orders add column if not exists carrier text;
+alter table orders add column if not exists tracking_number text;
+alter table orders add column if not exists payment_method text;
+
+alter table reviews add column if not exists admin_reply text;
+alter table reviews add column if not exists replied_at timestamptz;
+alter table reviews add column if not exists replied_by uuid references auth.users(id);
+
+alter table event_requests add column if not exists internal_notes text;
+alter table event_requests add column if not exists consent_at timestamptz;
+
+alter table product_variants add column if not exists cost_cop int;
+
+-- Sincroniza el email al crear la cuenta y rellena los perfiles existentes.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, email)
+  values (
+    new.id,
+    new.raw_user_meta_data->>'full_name',
+    new.email
+  )
+  on conflict (id) do update set email = excluded.email;
+  return new;
+end;
+$$;
+
+update profiles p
+   set email = u.email
+  from auth.users u
+ where p.id = u.id
+   and p.email is null;
+
+-- ------------------------------------------------------------
+-- 3. INVENTARIO Y MATERIAS PRIMAS
+-- ------------------------------------------------------------
+create table if not exists materials (
+  id                 uuid primary key default gen_random_uuid(),
+  name               text not null,
+  unit               text not null default 'g' check (unit in ('g','ml','unidad')),
+  stock              numeric(12,2) not null default 0 check (stock >= 0),
+  min_stock          numeric(12,2) not null default 0,
+  cost_per_unit_cop  int not null default 0 check (cost_per_unit_cop >= 0),
+  supplier           text,
+  is_active          boolean not null default true,
+  created_at         timestamptz not null default now()
+);
+
+create table if not exists stock_movements (
+  id          bigserial primary key,
+  material_id uuid references materials(id) on delete set null,
+  variant_id  uuid references product_variants(id) on delete set null,
+  type        text not null check (type in ('in','out','adjustment')),
+  quantity    numeric(12,2) not null,
+  reason      text,
+  created_by  uuid references auth.users(id),
+  created_at  timestamptz not null default now(),
+  check (material_id is not null or variant_id is not null)
+);
+
+create table if not exists product_materials (
+  variant_id  uuid not null references product_variants(id) on delete cascade,
+  material_id uuid not null references materials(id) on delete cascade,
+  quantity    numeric(12,2) not null check (quantity > 0),
+  primary key (variant_id, material_id)
+);
+
+-- ------------------------------------------------------------
+-- 4. PROMOCIONES Y FIDELIZACIÓN
+-- ------------------------------------------------------------
+create table if not exists promotions (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null,
+  type           text not null check (type in ('percent','fixed','bundle','birthday','points')),
+  value          int not null default 0,
+  code           text unique,
+  min_total_cop  int not null default 0,
+  starts_at      timestamptz default now(),
+  ends_at        timestamptz,
+  is_active      boolean not null default true,
+  metadata       jsonb not null default '{}'::jsonb,
+  created_at     timestamptz not null default now()
+);
+
+create table if not exists loyalty_points (
+  profile_id uuid primary key references profiles(id) on delete cascade,
+  points     int not null default 0 check (points >= 0),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists points_transactions (
+  id         bigserial primary key,
+  profile_id uuid not null references profiles(id) on delete cascade,
+  points     int not null,
+  reason     text,
+  order_id   uuid references orders(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- ------------------------------------------------------------
+-- 5. CONFIGURACIÓN Y AUDITORÍA
+-- ------------------------------------------------------------
+create table if not exists settings (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id)
+);
+
+create table if not exists audit_log (
+  id         bigserial primary key,
+  user_id    uuid references auth.users(id),
+  action     text not null,
+  entity     text not null,
+  entity_id  text,
+  payload    jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- ------------------------------------------------------------
+-- 6. RLS PARA EL PERSONAL
+-- ------------------------------------------------------------
+alter table admin_users         enable row level security;
+alter table materials           enable row level security;
+alter table stock_movements     enable row level security;
+alter table product_materials   enable row level security;
+alter table promotions          enable row level security;
+alter table loyalty_points      enable row level security;
+alter table points_transactions enable row level security;
+alter table settings            enable row level security;
+alter table audit_log           enable row level security;
+
+-- Personal: cada uno ve su fila; owner/admin gestionan todo.
+drop policy if exists "admin_users_self_read" on admin_users;
+create policy "admin_users_self_read" on admin_users
+  for select using (auth.uid() = user_id or public.is_owner());
+
+drop policy if exists "admin_users_owner_write" on admin_users;
+create policy "admin_users_owner_write" on admin_users
+  for all using (public.is_owner()) with check (public.is_owner());
+
+-- Catálogo: el personal puede leer y escribir todo.
+drop policy if exists "staff_collections_all" on collections;
+create policy "staff_collections_all" on collections
+  for all using (public.has_permission('products','read'))
+  with check (public.has_permission('products','write'));
+
+drop policy if exists "staff_products_all" on products;
+create policy "staff_products_all" on products
+  for all using (public.has_permission('products','read'))
+  with check (public.has_permission('products','write'));
+
+drop policy if exists "staff_variants_all" on product_variants;
+create policy "staff_variants_all" on product_variants
+  for all using (public.has_permission('products','read'))
+  with check (public.has_permission('products','write'));
+
+drop policy if exists "staff_images_all" on product_images;
+create policy "staff_images_all" on product_images
+  for all using (public.has_permission('products','read'))
+  with check (public.has_permission('products','write'));
+
+-- Pedidos
+drop policy if exists "staff_orders_read" on orders;
+create policy "staff_orders_read" on orders
+  for select using (public.has_permission('orders','read'));
+
+drop policy if exists "staff_orders_update" on orders;
+create policy "staff_orders_update" on orders
+  for update using (public.has_permission('orders','write'))
+  with check (public.has_permission('orders','write'));
+
+drop policy if exists "staff_order_items_read" on order_items;
+create policy "staff_order_items_read" on order_items
+  for select using (public.has_permission('orders','read'));
+
+-- Clientes
+drop policy if exists "staff_profiles_read" on profiles;
+create policy "staff_profiles_read" on profiles
+  for select using (public.has_permission('customers','read'));
+
+drop policy if exists "staff_profiles_update" on profiles;
+create policy "staff_profiles_update" on profiles
+  for update using (public.has_permission('customers','write'))
+  with check (public.has_permission('customers','write'));
+
+-- Reseñas
+drop policy if exists "staff_reviews_all" on reviews;
+create policy "staff_reviews_all" on reviews
+  for all using (public.has_permission('reviews','read'))
+  with check (public.has_permission('reviews','write'));
+
+-- Eventos
+drop policy if exists "staff_events_all" on event_requests;
+create policy "staff_events_all" on event_requests
+  for all using (public.has_permission('orders','read'))
+  with check (public.has_permission('orders','write'));
+
+-- Inventario
+drop policy if exists "staff_materials_all" on materials;
+create policy "staff_materials_all" on materials
+  for all using (public.has_permission('inventory','read'))
+  with check (public.has_permission('inventory','write'));
+
+drop policy if exists "staff_movements_all" on stock_movements;
+create policy "staff_movements_all" on stock_movements
+  for all using (public.has_permission('inventory','read'))
+  with check (public.has_permission('inventory','write'));
+
+drop policy if exists "staff_product_materials_all" on product_materials;
+create policy "staff_product_materials_all" on product_materials
+  for all using (public.has_permission('inventory','read'))
+  with check (public.has_permission('inventory','write'));
+
+-- Promociones
+drop policy if exists "staff_promotions_all" on promotions;
+create policy "staff_promotions_all" on promotions
+  for all using (public.has_permission('promotions','read'))
+  with check (public.has_permission('promotions','write'));
+
+drop policy if exists "staff_coupons_all" on coupons;
+create policy "staff_coupons_all" on coupons
+  for all using (public.has_permission('promotions','read'))
+  with check (public.has_permission('promotions','write'));
+
+drop policy if exists "staff_loyalty_all" on loyalty_points;
+create policy "staff_loyalty_all" on loyalty_points
+  for all using (public.has_permission('promotions','read'))
+  with check (public.has_permission('promotions','write'));
+
+drop policy if exists "staff_points_all" on points_transactions;
+create policy "staff_points_all" on points_transactions
+  for all using (public.has_permission('promotions','read'))
+  with check (public.has_permission('promotions','write'));
+
+-- Configuración: lectura para el personal, escritura para owner/admin.
+drop policy if exists "staff_settings_read" on settings;
+create policy "staff_settings_read" on settings
+  for select using (public.is_staff());
+
+drop policy if exists "owner_settings_write" on settings;
+create policy "owner_settings_write" on settings
+  for all using (public.is_owner()) with check (public.is_owner());
+
+-- Auditoría: el personal registra, solo owner/admin lee.
+drop policy if exists "staff_audit_insert" on audit_log;
+create policy "staff_audit_insert" on audit_log
+  for insert with check (public.is_staff());
+
+drop policy if exists "owner_audit_read" on audit_log;
+create policy "owner_audit_read" on audit_log
+  for select using (public.is_owner());
+
+-- ------------------------------------------------------------
+-- 7. VISTAS DE ESTADÍSTICAS
+-- ------------------------------------------------------------
+create or replace view admin_sales_daily
+with (security_invoker = true) as
+select
+  (paid_at at time zone 'America/Bogota')::date as day,
+  count(*) as orders,
+  sum(total_cop) as revenue_cop
+from orders
+where payment_status = 'approved' and paid_at is not null
+group by 1
+order by 1;
+
+create or replace view admin_top_products
+with (security_invoker = true) as
+select
+  oi.product_name,
+  oi.size_label,
+  sum(oi.quantity) as units,
+  sum(oi.subtotal_cop) as revenue_cop
+from order_items oi
+join orders o on o.id = oi.order_id
+where o.payment_status = 'approved'
+group by 1, 2
+order by units desc;
+
+create or replace view admin_customer_stats
+with (security_invoker = true) as
+select
+  p.id,
+  p.full_name,
+  p.email,
+  p.phone,
+  p.birth_date,
+  p.created_at,
+  count(o.id) filter (where o.payment_status = 'approved') as orders_count,
+  coalesce(sum(o.total_cop) filter (where o.payment_status = 'approved'), 0) as total_spent_cop,
+  max(o.created_at) filter (where o.payment_status = 'approved') as last_order_at
+from profiles p
+left join orders o on o.profile_id = p.id
+group by p.id;
+
+create or replace view admin_low_stock
+with (security_invoker = true) as
+select
+  v.id,
+  p.name as product_name,
+  v.size_label,
+  v.sku,
+  v.stock,
+  5 as threshold
+from product_variants v
+join products p on p.id = v.product_id
+where v.is_active and v.stock <= 5
+order by v.stock asc;
+
+-- ------------------------------------------------------------
+-- 8. CONFIGURACIÓN INICIAL
+-- ------------------------------------------------------------
+insert into settings (key, value) values
+  ('store', '{"name":"Iris Candles","email":"hola@iriscandles.com","whatsapp":"","city":"Bogotá","country":"Colombia"}'::jsonb),
+  ('shipping', '{"free_from_cop":180000,"default_eta":"1-3 días hábiles","zones":[]}'::jsonb),
+  ('payments', '{"provider":"wompi","methods":["PSE","Nequi","Daviplata","Tarjetas"],"sandbox":true}'::jsonb),
+  ('policies', '{"returns_days":5,"privacy_version":"2026-11","warranty":"Reemplazo por daños en transporte"}'::jsonb),
+  ('loyalty', '{"enabled":true,"points_per_1000":1,"point_value_cop":100,"birthday_discount_percent":15}'::jsonb)
+on conflict (key) do nothing;
+
+-- ------------------------------------------------------------
+-- 9. CREAR EL PRIMER OWNER
+-- 1) Crea el usuario en Supabase -> Authentication -> Users.
+-- 2) Copia su UUID y ejecuta:
+--    insert into admin_users (user_id, role)
+--    values ('<UUID-DEL-USUARIO>', 'owner')
+--    on conflict (user_id) do update set role = 'owner', is_active = true;
+-- ------------------------------------------------------------

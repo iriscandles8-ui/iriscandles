@@ -1,0 +1,377 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import StatusBadge from '../../components/admin/StatusBadge.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import {
+  formatCOP,
+  formatDateShort,
+  formatCompactCOP,
+  ORDER_STATUS,
+  EVENT_STATUS,
+} from '../../lib/admin';
+import {
+  demoOrders,
+  demoMonths,
+  demoProducts,
+  demoReviews,
+  demoEventRequests,
+} from '../../data/admin-demo';
+import {
+  getEventRequests,
+  getMonths,
+  getOrders,
+  getProducts,
+  getReviews,
+} from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const orders = supabase ? await getOrders(supabase) : demoOrders;
+const months = supabase ? await getMonths(supabase) : demoMonths;
+const products = supabase ? await getProducts(supabase) : demoProducts;
+const reviews = supabase ? await getReviews(supabase) : demoReviews;
+const eventRequests = supabase ? await getEventRequests(supabase) : demoEventRequests;
+
+const now = new Date();
+const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+const monthOrders = orders.filter((order) => order.createdAt.startsWith(monthPrefix));
+const approvedMonth = monthOrders.filter((order) => order.payment === 'approved');
+const revenueMonth = approvedMonth.reduce((sum, order) => sum + order.total, 0);
+const ticket = approvedMonth.length ? Math.round(revenueMonth / approvedMonth.length) : 0;
+const toDispatch = orders.filter((order) => order.status === 'paid' || order.status === 'processing').length;
+const pendingOrders = orders.filter((order) => order.status === 'pending').length;
+const pendingReviews = reviews.filter((review) => review.status === 'pending').length;
+const lowStock = products.flatMap((product) => product.variants).filter((variant) => variant.stock <= 5);
+const newEvents = eventRequests.filter((request) => request.status === 'new').length;
+
+const recentOrders = [...orders]
+  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  .slice(0, 5);
+
+const maxRevenue = Math.max(1, ...months.map((month) => month.revenue));
+const yearRevenue = months.reduce((sum, month) => sum + month.revenue, 0);
+const monthLabelRaw = new Intl.DateTimeFormat('es-CO', { month: 'long' }).format(now);
+const monthLabel = monthLabelRaw.charAt(0).toUpperCase() + monthLabelRaw.slice(1);
+const lastMonth = months[months.length - 1];
+const prevMonth = months[months.length - 2];
+const pctDelta = (currentValue: number, previousValue: number): number | null => {
+  if (!previousValue) return null;
+  return Math.round(((currentValue - previousValue) / previousValue) * 1000) / 10;
+};
+const revenueDelta = lastMonth && prevMonth ? pctDelta(lastMonth.revenue, prevMonth.revenue) : null;
+const ordersDelta = lastMonth && prevMonth ? pctDelta(lastMonth.orders, prevMonth.orders) : null;
+
+const attention = [
+  {
+    icon: 'bag',
+    label: 'Pedidos pendientes de pago',
+    count: pendingOrders,
+    href: '/admin/pedidos',
+    tone: pendingOrders > 0 ? 'warn' : 'ok',
+  },
+  {
+    icon: 'box',
+    label: 'Variantes con stock bajo',
+    count: lowStock.length,
+    href: '/admin/inventario',
+    tone: lowStock.length > 0 ? 'warn' : 'ok',
+  },
+  {
+    icon: 'star',
+    label: 'Reseñas por moderar',
+    count: pendingReviews,
+    href: '/admin/resenas',
+    tone: pendingReviews > 0 ? 'warn' : 'ok',
+  },
+  {
+    icon: 'mail',
+    label: 'Solicitudes de evento nuevas',
+    count: newEvents,
+    href: '/admin/pedidos#eventos',
+    tone: newEvents > 0 ? 'warn' : 'ok',
+  },
+];
+---
+
+<AdminLayout title="Panel" section="Panel">
+  <PageHeader
+    eyebrow="Resumen del taller"
+    title="Hola, Iris."
+    description="Este es el pulso de Iris Candles. Revisa lo que necesita tu atención y cómo va el mes."
+  >
+    <a href="/admin/productos" slot="actions" class="admin-btn admin-btn-primary">
+      <AdminIcon name="plus" size={15} />
+      Nuevo producto
+    </a>
+    <a href="/tienda" slot="actions" target="_blank" rel="noopener" class="admin-btn admin-btn-outline">
+      Ver tienda
+      <AdminIcon name="external" size={13} />
+    </a>
+  </PageHeader>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard
+      label={`Ingresos de ${monthLabel.toLowerCase()}`}
+      value={formatCompactCOP(revenueMonth)}
+      delta={revenueDelta}
+      deltaLabel={prevMonth ? `vs. ${prevMonth.label.toLowerCase()}` : undefined}
+      icon="coins"
+      hint="COP"
+    />
+    <StatCard
+      label="Pedidos del mes"
+      value={String(monthOrders.length)}
+      delta={ordersDelta}
+      deltaLabel={prevMonth ? `vs. ${prevMonth.label.toLowerCase()}` : undefined}
+      icon="bag"
+      hint={`${pendingOrders} por confirmar`}
+    />
+    <StatCard
+      label="Ticket promedio"
+      value={formatCompactCOP(ticket)}
+      icon="chart"
+      hint="por pedido pagado"
+    />
+    <StatCard
+      label="Por despachar"
+      value={String(toDispatch)}
+      delta={null}
+      icon="truck"
+      hint={toDispatch === 0 ? 'Todo al día' : 'Listos para empacar'}
+    />
+  </section>
+
+  <div class="mt-5 grid gap-5 xl:grid-cols-3">
+    <section class="admin-card xl:col-span-2">
+      <div class="admin-card-head">
+        <div>
+          <h2 class="admin-card-title">Ingresos por mes</h2>
+          <p class="mt-0.5 text-[0.7rem] text-ink/45">
+            {formatCOP(yearRevenue)} acumulados en {now.getFullYear()} · {monthLabel.toLowerCase()} en curso
+          </p>
+        </div>
+        <div class="flex items-center gap-4 text-[0.63rem] text-ink/45">
+          <span class="flex items-center gap-1.5">
+            <span class="h-2 w-2 rounded-full bg-jade-700"></span> Mes cerrado
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="h-2 w-2 rounded-full bg-terracotta-600"></span> En curso
+          </span>
+        </div>
+      </div>
+
+      <div class="px-4 pb-5 pt-6 sm:px-6">
+        <div class="flex h-44 items-end gap-1.5 sm:gap-3">
+          {
+            months.map((month, index) => {
+              const height = Math.max(Math.round((month.revenue / maxRevenue) * 100), 4);
+              const current = index === months.length - 1;
+              return (
+                <div class="group flex h-full flex-1 flex-col justify-end gap-1.5" title={`${month.label}: ${formatCOP(month.revenue)} · ${month.orders} pedidos`}>
+                  <span class="text-center text-[0.55rem] text-ink/35 opacity-0 transition-opacity group-hover:opacity-100">
+                    {formatCompactCOP(month.revenue)}
+                  </span>
+                  <div
+                    class:list={[
+                      'w-full rounded-t-[2px] transition-colors',
+                      current ? 'bg-terracotta-600' : 'bg-jade-800/80 group-hover:bg-jade-700',
+                    ]}
+                    style={`height:${height}%`}
+                  />
+                </div>
+              );
+            })
+          }
+        </div>
+        <div class="mt-2 flex gap-1.5 border-t border-cream-300 pt-2 sm:gap-3">
+          {
+            months.map((month, index) => (
+              <span
+                class:list={[
+                  'flex-1 text-center text-[0.58rem] uppercase tracking-[0.06em]',
+                  index === months.length - 1 ? 'font-semibold text-terracotta-700' : 'text-ink/40',
+                ]}
+              >
+                {month.label}
+              </span>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="admin-card-head">
+        <h2 class="admin-card-title">Requiere tu atención</h2>
+        <span class="admin-badge" data-tone={attention.some((item) => item.count > 0) ? 'amber' : 'jade'}>
+          {attention.reduce((sum, item) => sum + item.count, 0)} pendientes
+        </span>
+      </div>
+
+      <ul class="divide-y divide-cream-300">
+        {
+          attention.map((item) => (
+            <li>
+              <a href={item.href} class="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-cream-100/40">
+                <span class:list={['grid h-8 w-8 shrink-0 place-items-center rounded-xs', item.count > 0 ? 'bg-terracotta-600/10 text-terracotta-700' : 'bg-jade-50 text-jade-700']}>
+                  <AdminIcon name={item.icon} size={15} />
+                </span>
+                <span class="min-w-0 flex-1 text-[0.78rem] text-ink/70">{item.label}</span>
+                <span class:list={['font-display text-lg', item.count > 0 ? 'text-terracotta-700' : 'text-jade-900/30']}>
+                  {item.count}
+                </span>
+                <AdminIcon name="arrowRight" size={14} class="text-ink/20 transition-transform group-hover:translate-x-0.5 group-hover:text-ink/40" />
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+
+      <div class="border-t border-cream-300 p-4">
+        <div class="flex items-center justify-between text-[0.68rem]">
+          <span class="text-ink/45">Stock total de velas</span>
+          <span class="font-medium text-jade-900">
+            {products.flatMap((product) => product.variants).reduce((sum, variant) => sum + variant.stock, 0)} unidades
+          </span>
+        </div>
+        <div class="mt-2 flex items-center justify-between text-[0.68rem]">
+          <span class="text-ink/45">Producto más vendido</span>
+          <span class="font-medium text-jade-900">Otoño Dorado · 220 g</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="mt-5 grid gap-5 xl:grid-cols-3">
+    <section class="admin-card xl:col-span-2">
+      <div class="admin-card-head">
+        <div>
+          <h2 class="admin-card-title">Últimos pedidos</h2>
+          <p class="mt-0.5 text-[0.7rem] text-ink/45">Los movimientos más recientes de la tienda.</p>
+        </div>
+        <a href="/admin/pedidos" class="admin-btn admin-btn-ghost admin-btn-sm">
+          Ver todos
+          <AdminIcon name="arrowRight" size={13} />
+        </a>
+      </div>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Cliente</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              recentOrders.map((order) => (
+                <tr>
+                  <td class="font-medium text-jade-900">{order.number}</td>
+                  <td>
+                    <p class="text-ink/75">{order.customer}</p>
+                    <p class="text-[0.66rem] text-ink/40">{order.city}</p>
+                  </td>
+                  <td class="text-ink/55">{formatDateShort(order.createdAt)}</td>
+                  <td>
+                    <StatusBadge
+                      label={ORDER_STATUS[order.status]?.label ?? order.status}
+                      tone={ORDER_STATUS[order.status]?.tone ?? 'slate'}
+                    />
+                  </td>
+                  <td class="num font-medium text-jade-900">{formatCOP(order.total)}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="admin-card-head">
+        <h2 class="admin-card-title">Reseñas recientes</h2>
+        <a href="/admin/resenas" class="text-[0.68rem] text-jade-900/55 hover:text-jade-900">Moderar</a>
+      </div>
+
+      <ul class="divide-y divide-cream-300">
+        {
+          reviews.slice(0, 3).map((review) => (
+            <li class="px-4 py-3.5">
+              <div class="flex items-center justify-between gap-2">
+                <span class="admin-stars" aria-label={`${review.rating} de 5 estrellas`}>
+                  {'★'.repeat(review.rating)}
+                  <span class="text-cream-300">{'★'.repeat(5 - review.rating)}</span>
+                </span>
+                <StatusBadge
+                  label={review.status === 'pending' ? 'Pendiente' : review.status === 'approved' ? 'Publicada' : 'Rechazada'}
+                  tone={review.status === 'pending' ? 'amber' : review.status === 'approved' ? 'jade' : 'slate'}
+                />
+              </div>
+              <p class="mt-1.5 text-[0.78rem] font-medium text-jade-900">{review.title}</p>
+              <p class="mt-1 line-clamp-2 text-[0.72rem] leading-relaxed text-ink/55">{review.body}</p>
+              <p class="mt-1.5 text-[0.62rem] text-ink/35">{review.author} · {review.product}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+  </div>
+
+  <section id="eventos" class="admin-card mt-5 scroll-mt-24">
+    <div class="admin-card-head">
+      <div>
+        <h2 class="admin-card-title">Solicitudes de evento</h2>
+        <p class="mt-0.5 text-[0.7rem] text-ink/45">Pedidos desde 15 unidades. Cotiza y da seguimiento.</p>
+      </div>
+      <a href="/admin/pedidos#eventos" class="admin-btn admin-btn-ghost admin-btn-sm">
+        Gestionar
+        <AdminIcon name="arrowRight" size={13} />
+      </a>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Solicitante</th>
+            <th>Tipo</th>
+            <th>Cantidad</th>
+            <th>Fecha del evento</th>
+            <th>Recibida</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            eventRequests.map((request) => (
+              <tr>
+                <td>
+                  <p class="font-medium text-jade-900">{request.name}</p>
+                  <p class="text-[0.66rem] text-ink/40">{request.company}</p>
+                </td>
+                <td class="text-ink/60">{request.type}</td>
+                <td class="num text-ink/70">{request.quantity} u.</td>
+                <td class="text-ink/55">{formatDateShort(request.date)}</td>
+                <td class="text-ink/55">{formatDateShort(request.createdAt)}</td>
+                <td>
+                  <StatusBadge
+                    label={EVENT_STATUS[request.status]?.label ?? request.status}
+                    tone={EVENT_STATUS[request.status]?.tone ?? 'slate'}
+                  />
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AdminLayout>
