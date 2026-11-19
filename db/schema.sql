@@ -123,6 +123,7 @@ create table if not exists orders (
   payment_method       text,
   shipping_address     jsonb not null,
   notes                text,
+  idempotency_key      text unique,
   created_at           timestamptz not null default now(),
   paid_at              timestamptz
 );
@@ -263,6 +264,15 @@ begin
      and i.variant_id = v.id;
 end;
 $$;
+
+-- Seguridad: Postgres otorga EXECUTE a PUBLIC por defecto al crear una función.
+-- Sin estos REVOKE, cualquier visitante podría llamar confirm_order() por RPC
+-- y aprobar pedidos ajenos descontando stock. Solo el backend (service role)
+-- debe poder invocarla. ALTER/CREATE OR REPLACE no restaura estos permisos.
+revoke all on function public.confirm_order(uuid, text) from public;
+revoke all on function public.confirm_order(uuid, text) from anon;
+revoke all on function public.confirm_order(uuid, text) from authenticated;
+grant execute on function public.confirm_order(uuid, text) to service_role;
 
 -- ------------------------------------------------------------
 -- ROW LEVEL SECURITY

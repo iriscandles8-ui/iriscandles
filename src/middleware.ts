@@ -12,6 +12,12 @@ const DEMO_SESSION: AdminSession = {
 };
 
 /**
+ * El modo demo solo existe en desarrollo y con habilitación explícita.
+ * En producción un error de configuración NUNCA debe abrir el panel.
+ */
+const allowDemo = import.meta.env.DEV && import.meta.env.ALLOW_DEMO_MODE === 'true';
+
+/**
  * Protege el panel: valida la sesión de Supabase y la pertenencia al
  * equipo autorizado antes de renderizar cualquier página de /admin.
  */
@@ -27,8 +33,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   if (!isSupabaseServerConfigured) {
-    context.locals.adminSession = DEMO_SESSION;
-    return next();
+    if (allowDemo) {
+      context.locals.adminSession = DEMO_SESSION;
+      return next();
+    }
+    return context.redirect('/admin/login?error=unconfigured');
   }
 
   const supabase = createSupabaseServer(context);

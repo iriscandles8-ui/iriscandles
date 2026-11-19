@@ -1,12 +1,13 @@
 ---
 import Base from '../layouts/Base.astro';
+import CandleAccent from '../components/CandleAccent.astro';
 ---
 
 <Base
   title="Eventos y pedidos por volumen · Iris Candles"
   description="Velas artesanales personalizadas para bodas, empresas, hoteles y celebraciones. Pedidos desde 15 unidades con cotización a medida."
 >
-  <section class="border-b border-cream-300 bg-cream-100/40">
+  <section class="relative overflow-hidden border-b border-cream-300 bg-cream-100/40">
     <div class="container-iris py-14 lg:py-20">
       <p class="eyebrow text-terracotta-700">Eventos y empresas</p>
       <h1 class="mt-4 max-w-3xl font-display text-4xl leading-tight text-jade-900 sm:text-5xl">
@@ -18,6 +19,14 @@ import Base from '../layouts/Base.astro';
         resto.
       </p>
     </div>
+
+    <CandleAccent
+      src="/candles/vela-grupo-marfil.webp"
+      width={1400}
+      height={1543}
+      class="absolute bottom-0 right-6 hidden w-24 lg:block xl:right-12 xl:w-32"
+      delay={1.1}
+    />
   </section>
 
   <section class="py-14 lg:py-20">
@@ -160,6 +169,8 @@ import Base from '../layouts/Base.astro';
   const form = document.getElementById('event-form') as HTMLFormElement | null;
   const status = document.querySelector<HTMLElement>('[data-status]');
   const success = document.querySelector<HTMLElement>('[data-success]');
+  const MIN_FILL_MS = 1500;
+  const mountedAt = Date.now();
   const successName = document.querySelector<HTMLElement>('[data-success-name]');
   const dateInput = document.getElementById('event-date') as HTMLInputElement | null;
 
@@ -175,6 +186,7 @@ import Base from '../layouts/Base.astro';
     const data = new FormData(form);
     const honeypot = String(data.get('website') ?? '');
     if (honeypot.trim() !== '') return;
+    if (Date.now() - mountedAt < MIN_FILL_MS) return;
 
     const name = String(data.get('name') ?? '').trim();
     const payload = {

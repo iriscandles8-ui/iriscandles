@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import ProductCard from '../components/ProductCard.astro';
+import CandleAccent from '../components/CandleAccent.astro';
 import { collections } from '../data/collections';
 import { pricesAreProvisional } from '../data/pricing';
 ---
@@ -9,7 +10,7 @@ import { pricesAreProvisional } from '../data/pricing';
   title="Tienda · Iris Candles"
   description="Cuatro colecciones de velas artesanales colombianas: Otoño Dorado, Esencia del Valle, Loto Esmeralda y Luz Serena."
 >
-  <section class="border-b border-cream-300 bg-cream-100/40">
+  <section class="relative overflow-hidden border-b border-cream-300 bg-cream-100/40">
     <div class="container-iris py-14 lg:py-20">
       <p class="eyebrow text-terracotta-700">Tienda</p>
       <h1 class="mt-4 max-w-2xl font-display text-4xl leading-tight text-jade-900 sm:text-5xl">
@@ -20,6 +21,14 @@ import { pricesAreProvisional } from '../data/pricing';
         quieras habitar.
       </p>
     </div>
+
+    <CandleAccent
+      src="/candles/vela-par-calido.webp"
+      width={611}
+      height={1110}
+      class="absolute bottom-0 right-5 hidden w-20 lg:block xl:right-10 xl:w-28"
+      delay={0.9}
+    />
   </section>
 
   <section class="py-12 lg:py-16">

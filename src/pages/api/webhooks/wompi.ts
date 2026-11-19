@@ -29,7 +29,7 @@ const asRow = (value: unknown): Row =>
  *      descuenta stock una sola vez.
  */
 export const POST: APIRoute = async ({ request }) => {
-  if (!isWompiConfigured) {
+  if (!(await isWompiConfigured())) {
     return json({ error: 'Wompi no está configurado.' }, 503);
   }
 

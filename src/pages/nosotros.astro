@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import CandleVisual from '../components/CandleVisual.astro';
+import CandleAccent from '../components/CandleAccent.astro';
 
 const values = [
   {
@@ -73,6 +74,14 @@ const values = [
       <div class="lg:col-span-5">
         <p class="eyebrow text-terracotta-700">Lo que hay dentro</p>
         <h2 class="mt-3 font-display text-3xl text-jade-900 sm:text-4xl">Sin secretos</h2>
+
+        <CandleAccent
+          src="/candles/vela-espiral-dorado.webp"
+          width={581}
+          height={928}
+          class="mt-8 hidden w-24 sm:block lg:w-32"
+          delay={1.6}
+        />
       </div>
       <dl class="grid gap-6 sm:grid-cols-2 lg:col-span-7">
         {

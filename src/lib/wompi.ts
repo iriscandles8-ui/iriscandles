@@ -6,25 +6,54 @@
  * la firma de integridad del checkout y la verificación del webhook.
  *
  * Llaves necesarias (panel de Wompi → Desarrolladores):
- *   WOMPI_PUBLIC_KEY        pub_test_... / pub_prod_...
- *   WOMPI_PRIVATE_KEY       prv_test_... / prv_prod_...
- *   WOMPI_INTEGRITY_SECRET  secreto de integridad
- *   WOMPI_EVENTS_SECRET     secreto de eventos (webhook)
+ *   WOMPI_PUBLIC_KEY        pub_test_... / pub_prod_...  (pública)
+ *   WOMPI_PRIVATE_KEY       prv_test_... / prv_prod_...  (secreta)
+ *   WOMPI_INTEGRITY_SECRET  secreto de integridad        (secreto)
+ *   WOMPI_EVENTS_SECRET     secreto de eventos (webhook) (secreto)
+ *
+ * IMPORTANTE: en Cloudflare los secretos se configuran en RUNTIME
+ * (`wrangler secret put ...`), no en variables de build. Por eso la
+ * configuración se lee del binding `cloudflare:workers` en cada petición,
+ * con `import.meta.env` únicamente como respaldo para desarrollo local.
  */
 
 export const WOMPI_CHECKOUT_URL = 'https://checkout.wompi.co/p/';
 export const WOMPI_CURRENCY = 'COP';
 
-export const wompiConfig = {
-  publicKey: import.meta.env.WOMPI_PUBLIC_KEY ?? '',
-  privateKey: import.meta.env.WOMPI_PRIVATE_KEY ?? '',
-  integritySecret: import.meta.env.WOMPI_INTEGRITY_SECRET ?? '',
-  eventsSecret: import.meta.env.WOMPI_EVENTS_SECRET ?? '',
+export type WompiConfig = {
+  publicKey: string;
+  privateKey: string;
+  integritySecret: string;
+  eventsSecret: string;
 };
 
-export const isWompiConfigured = Boolean(
-  wompiConfig.publicKey && wompiConfig.integritySecret && wompiConfig.eventsSecret,
-);
+type EnvBag = Record<string, string | undefined>;
+
+async function runtimeEnv(): Promise<EnvBag> {
+  try {
+    const { env } = await import('cloudflare:workers');
+    return (env ?? {}) as EnvBag;
+  } catch {
+    return {};
+  }
+}
+
+/** Devuelve la configuración vigente. Nunca cachear secretos en el módulo. */
+export async function getWompiConfig(): Promise<WompiConfig> {
+  const env = await runtimeEnv();
+  return {
+    publicKey: env.WOMPI_PUBLIC_KEY || import.meta.env.WOMPI_PUBLIC_KEY || '',
+    privateKey: env.WOMPI_PRIVATE_KEY || import.meta.env.WOMPI_PRIVATE_KEY || '',
+    integritySecret: env.WOMPI_INTEGRITY_SECRET || import.meta.env.WOMPI_INTEGRITY_SECRET || '',
+    eventsSecret: env.WOMPI_EVENTS_SECRET || import.meta.env.WOMPI_EVENTS_SECRET || '',
+  };
+}
+
+/** Async porque los secretos pueden vivir solo en el runtime de Cloudflare. */
+export async function isWompiConfigured(): Promise<boolean> {
+  const config = await getWompiConfig();
+  return Boolean(config.publicKey && config.integritySecret && config.eventsSecret);
+}
 
 async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
@@ -43,10 +72,11 @@ export async function integritySignature(
   amountInCents: number,
   currency: string = WOMPI_CURRENCY,
 ): Promise<string> {
-  if (!wompiConfig.integritySecret) {
+  const config = await getWompiConfig();
+  if (!config.integritySecret) {
     throw new Error('Falta WOMPI_INTEGRITY_SECRET.');
   }
-  return sha256Hex(`${reference}${amountInCents}${currency}${wompiConfig.integritySecret}`);
+  return sha256Hex(`${reference}${amountInCents}${currency}${config.integritySecret}`);
 }
 
 type CheckoutParams = {
@@ -65,13 +95,14 @@ export async function buildWompiCheckoutUrl({
   customerEmail,
   customerName,
 }: CheckoutParams): Promise<string> {
-  if (!wompiConfig.publicKey) throw new Error('Falta WOMPI_PUBLIC_KEY.');
+  const config = await getWompiConfig();
+  if (!config.publicKey) throw new Error('Falta WOMPI_PUBLIC_KEY.');
 
   const amountInCents = Math.round(amountCop * 100);
   const signature = await integritySignature(reference, amountInCents);
 
   const params = new URLSearchParams({
-    'public-key': wompiConfig.publicKey,
+    'public-key': config.publicKey,
     currency: WOMPI_CURRENCY,
     'amount-in-cents': String(amountInCents),
     reference,
@@ -104,7 +135,8 @@ function valueAtPath(source: unknown, path: string): unknown {
  * SHA-256(valores de signature.properties + timestamp + secreto_eventos).
  */
 export async function verifyWompiEvent(body: unknown): Promise<boolean> {
-  if (!wompiConfig.eventsSecret) return false;
+  const config = await getWompiConfig();
+  if (!config.eventsSecret) return false;
 
   const event = body as WompiEvent;
   const properties = event?.signature?.properties;
@@ -115,7 +147,7 @@ export async function verifyWompiEvent(body: unknown): Promise<boolean> {
   const components = properties.map((property) =>
     String(valueAtPath(event.data, String(property)) ?? ''),
   );
-  const raw = `${components.join('')}${String(event.timestamp ?? '')}${wompiConfig.eventsSecret}`;
+  const raw = `${components.join('')}${String(event.timestamp ?? '')}${config.eventsSecret}`;
   const expected = await sha256Hex(raw);
 
   return expected.toLowerCase() === checksum.toLowerCase();

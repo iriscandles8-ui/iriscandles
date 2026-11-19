@@ -251,6 +251,10 @@ import { isDemoMode } from '../../lib/admin';
         showError('Tu cuenta no tiene permisos para el panel. Pide a la propietaria que te autorice.');
       }
 
+      if (params.get('error') === 'unconfigured') {
+        showError('El panel no está disponible en este momento. Inténtalo más tarde.');
+      }
+
       if (isDemoMode) {
         if (status) status.textContent = 'Demo: cualquier credencial abre el panel.';
       } else if (supabase) {
@@ -275,8 +279,12 @@ import { isDemoMode } from '../../lib/admin';
           emailInput?.focus();
           return;
         }
-        if (isDemoMode || !supabase) {
-          if (status) status.textContent = 'En modo demo no se envían correos.';
+        if (!supabase) {
+          if (status) {
+            status.textContent = isDemoMode
+              ? 'En modo demo no se envían correos.'
+              : 'El panel no está disponible en este momento.';
+          }
           return;
         }
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -302,10 +310,15 @@ import { isDemoMode } from '../../lib/admin';
           return;
         }
 
-        if (isDemoMode || !supabase) {
+        if (isDemoMode) {
           if (submit) submit.disabled = true;
           if (status) status.textContent = 'Entrando al panel de demostración…';
           window.setTimeout(() => window.location.assign(next), 350);
+          return;
+        }
+
+        if (!supabase) {
+          showError('El panel no está disponible en este momento. Inténtalo más tarde.');
           return;
         }
 

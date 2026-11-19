@@ -372,7 +372,21 @@ const paymentMethods = PAYMENT_METHODS;
   const submitButton = document.querySelector<HTMLButtonElement>('[data-submit]');
 
   const DRAFT_KEY = 'iris.checkout.v1';
+  const IDEMPOTENCY_KEY = 'iris.checkout.idempotency.v1';
   const OWNER_EMAIL = 'hola@iriscandles.com';
+
+  /** Una clave por intento de compra, reutilizada en reintentos y dobles clics. */
+  function getIdempotencyKey(): string {
+    try {
+      const stored = window.sessionStorage.getItem(IDEMPOTENCY_KEY);
+      if (stored) return stored;
+      const key = crypto.randomUUID();
+      window.sessionStorage.setItem(IDEMPOTENCY_KEY, key);
+      return key;
+    } catch {
+      return crypto.randomUUID();
+    }
+  }
 
   let orderCompleted = false;
 
@@ -604,7 +618,10 @@ const paymentMethods = PAYMENT_METHODS;
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': getIdempotencyKey(),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -617,6 +634,7 @@ const paymentMethods = PAYMENT_METHODS;
         orderCompleted = true;
         try {
           window.sessionStorage.removeItem(DRAFT_KEY);
+          window.sessionStorage.removeItem(IDEMPOTENCY_KEY);
         } catch {
           /* sin almacenamiento */
         }
@@ -627,6 +645,11 @@ const paymentMethods = PAYMENT_METHODS;
 
       if (response.status === 400) {
         showError(data.error || 'Revisa los datos e inténtalo de nuevo.');
+        return;
+      }
+
+      if (response.status === 429) {
+        showError(data.error || 'Has enviado muchos pedidos. Espera unos minutos.');
         return;
       }
 

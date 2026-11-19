@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import CandleAccent from '../components/CandleAccent.astro';
 import { collections } from '../data/collections';
 
 const quizData = collections.map((collection) => ({
@@ -16,7 +17,14 @@ const quizData = collections.map((collection) => ({
   title="Encuentra tu aroma · Iris Candles"
   description="Responde tres preguntas y descubre qué colección de Iris Candles acompaña mejor tu momento."
 >
-  <section class="py-14 lg:py-20">
+  <section class="relative overflow-hidden py-14 lg:py-20">
+    <CandleAccent
+      src="/candles/vela-taper-laton.webp"
+      width={800}
+      height={1000}
+      class="absolute right-6 top-16 hidden w-20 xl:block 2xl:w-28"
+      delay={2}
+    />
     <div class="container-iris max-w-3xl">
       <p class="eyebrow text-terracotta-700">Encuentra tu aroma</p>
       <h1 class="mt-4 font-display text-4xl leading-tight text-jade-900 sm:text-5xl">

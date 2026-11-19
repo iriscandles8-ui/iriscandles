@@ -4,7 +4,15 @@ import { supabase, isSupabaseConfigured } from './supabase';
    Panel de administración · utilidades compartidas
    ------------------------------------------------------------------ */
 
-export const isDemoMode = !isSupabaseConfigured;
+/**
+ * El modo demo es una herramienta de desarrollo explícita, NO un fallback de
+ * configuración. En producción (o sin la bandera) el panel permanece cerrado
+ * cuando Supabase no está configurado.
+ */
+export const isDemoMode =
+  import.meta.env.DEV &&
+  import.meta.env.ALLOW_DEMO_MODE === 'true' &&
+  !isSupabaseConfigured;
 
 export type AdminRole = 'owner' | 'admin' | 'manager' | 'viewer';
 
@@ -87,7 +95,7 @@ const demoSession: AdminSession = {
  * Supabase) retorna una sesión local de propietaria.
  */
 export async function getAdminSession(): Promise<AdminSession | null> {
-  if (!supabase) return demoSession;
+  if (!supabase) return isDemoMode ? demoSession : null;
 
   const { data: sessionData } = await supabase.auth.getSession();
   const user = sessionData.session?.user;

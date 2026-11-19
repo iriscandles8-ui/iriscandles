@@ -1,8 +1,9 @@
 # Panel de administración · Guía de conexión
 
-Esta guía deja el panel de Iris Candles funcionando con datos reales. Mientras no existan
-las variables de Supabase, el panel arranca en **modo demostración**: los datos viven en
-memoria y los cambios se pierden al recargar.
+Esta guía deja el panel de Iris Candles funcionando con datos reales. El **modo demostración**
+solo existe en desarrollo (`npm run dev`) y debe habilitarse de forma explícita con
+`ALLOW_DEMO_MODE=true` en `.env`. Sin Supabase y sin esa bandera, el panel permanece cerrado:
+un error de configuración nunca abre el acceso.
 
 ## Arquitectura
 
@@ -31,15 +32,18 @@ La clave `service_role` nunca debe llegar al navegador.
 
 En **SQL Editor → New query**, puedes ejecutar un solo archivo:
 
-1. `db/setup.sql` — contiene `schema.sql` + `admin.sql` en orden.
+1. `db/setup.sql` — contiene `schema.sql` + `admin.sql` en orden, **incluido el cierre de
+   `confirm_order()` al público**. Esta es la opción recomendada.
 
 Si prefieres hacerlo por partes:
 
-1. `db/schema.sql` — catálogo, pedidos, clientes, reseñas, envíos, cupones y RLS pública.
+1. `db/schema.sql` — catálogo, pedidos, clientes, reseñas, envíos, cupones, RLS pública y
+   los `REVOKE`/`GRANT` que dejan `confirm_order()` solo para `service_role`.
 2. `db/admin.sql` — personal autorizado, inventario, materias primas, promociones, puntos,
    configuración, auditoría y vistas de estadísticas.
-3. `db/manual-payments.sql` — cierra `confirm_order()` al público y la deja solo para
-   `service_role`. Necesario para que nadie pueda aprobar pedidos desde el navegador.
+3. `db/manual-payments.sql` — versión independiente de ese mismo endurecimiento. Útil para
+   instalaciones anteriores: vuelve a ejecutarlo si alguna vez instalaste solo el esquema
+   original. Necesario para que nadie pueda aprobar pedidos desde el navegador.
 
 Los tres scripts son idempotentes (`if not exists`, `drop policy if exists`), así que puedes
 volver a ejecutarlos si actualizas el repositorio.

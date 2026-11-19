@@ -129,6 +129,7 @@ create table if not exists orders (
   payment_method       text,
   shipping_address     jsonb not null,
   notes                text,
+  idempotency_key      text unique,
   created_at           timestamptz not null default now(),
   paid_at              timestamptz
 );
@@ -269,6 +270,12 @@ begin
      and i.variant_id = v.id;
 end;
 $$;
+
+-- Seguridad: ver db/schema.sql. Solo el backend puede confirmar pedidos.
+revoke all on function public.confirm_order(uuid, text) from public;
+revoke all on function public.confirm_order(uuid, text) from anon;
+revoke all on function public.confirm_order(uuid, text) from authenticated;
+grant execute on function public.confirm_order(uuid, text) to service_role;
 
 -- ------------------------------------------------------------
 -- ROW LEVEL SECURITY

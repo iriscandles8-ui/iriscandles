@@ -24,6 +24,10 @@ const { dark = false } = Astro.props;
         ]}
       />
     </label>
+    <label class="sr-only" aria-hidden="true">
+      Website
+      <input name="website" type="text" tabindex="-1" autocomplete="off" />
+    </label>
     <button type="submit" class:list={[dark ? 'btn-cream' : 'btn-primary', 'shrink-0']}>
       Recibir cartas
     </button>
@@ -43,9 +47,18 @@ const { dark = false } = Astro.props;
 <script>
   import { supabase } from '../lib/supabase';
 
+  // Los formularios rellenados en menos de este tiempo suelen ser bots.
+  const MIN_FILL_MS = 1200;
+
   document.querySelectorAll<HTMLFormElement>('[data-newsletter]').forEach((form) => {
+    const mountedAt = Date.now();
+
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+
+      const honeypot = form.querySelector<HTMLInputElement>('input[name="website"]');
+      if (honeypot && honeypot.value.trim() !== '') return;
+      if (Date.now() - mountedAt < MIN_FILL_MS) return;
 
       const input = form.querySelector<HTMLInputElement>('input[name="email"]');
       const status = form.querySelector<HTMLElement>('[data-newsletter-status]');
