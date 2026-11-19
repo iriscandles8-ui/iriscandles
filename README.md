@@ -25,7 +25,9 @@ Copia `.env.example` a `.env` y completa las variables. La clave `SUPABASE_SERVI
 Ejecuta en el SQL Editor de Supabase, en este orden:
 
 1. `db/setup.sql` (o `db/schema.sql` y `db/admin.sql`)
-2. `db/manual-payments.sql` — cierra `confirm_order()` al público y la deja solo para `service_role`
+2. `db/collections.sql` — colecciones gestionables y bucket `collection-images`
+3. `db/manual-payments.sql` — cierra `confirm_order()` al público y la deja solo para `service_role`
+4. `db/media-library.sql` — biblioteca multimedia (`media_assets` y políticas de Storage)
 
 ## Flujo de pedidos
 
@@ -35,6 +37,14 @@ Ejecuta en el SQL Editor de Supabase, en este orden:
 4. Si falla el guardado, el checkout muestra el resumen y enlaces de WhatsApp/correo para no perder la venta.
 
 Guía completa: [`docs/pagos-manuales.md`](docs/pagos-manuales.md) y [`docs/admin-setup.md`](docs/admin-setup.md).
+
+## Biblioteca multimedia
+
+`/admin/medios` (Catálogo → Biblioteca) centraliza las fotografías en los buckets ya existentes de Supabase Storage (`product-images` y `collection-images`). Permite subir, previsualizar antes de guardar, buscar por nombre, reemplazar, reutilizar la misma imagen en productos/colecciones, ver dónde se usa y borrar solo archivos sin referencias.
+
+Reemplazar un archivo conserva su URL pública, así que las referencias de productos y colecciones no se rompen al editarlos. Guía: [`docs/biblioteca-multimedia.md`](docs/biblioteca-multimedia.md).
+
+Para comprobar la instalación: `npm run verify:media` (solo lectura) o `npm run verify:media:write` (incluye una prueba real de subida y reemplazo con limpieza automática).
 
 ## Despliegue
 

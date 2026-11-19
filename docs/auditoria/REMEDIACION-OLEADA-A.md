@@ -78,6 +78,26 @@ Añadir reglas de rate limiting en Cloudflare para `/api/checkout`, `/api/webhoo
 
 ---
 
+## Despliegue con Workers Builds (Cloudflare)
+
+El dashboard de Cloudflare puede mostrar estos comandos al conectar el repo con Git:
+
+| Campo | Valor correcto |
+|---|---|
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Preview command | `npx wrangler dev` (**no** `wrangler preview`) |
+
+Para que `wrangler deploy` funcione se añadió `wrangler.jsonc` en la raíz:
+
+- `main`: `./dist/server/entry.mjs` (generado por `@astrojs/cloudflare`).
+- `assets.directory`: `./dist/client`.
+- `name`: `iriscandles` (debe coincidir con el nombre del proyecto en Cloudflare).
+
+El sitio no usa `astro:assets` ni sesiones KV de Cloudflare (la sesión del panel vive en cookies de Supabase), así que **no se configuran** los bindings `IMAGES`/`SESSION` que el adaptador sugiere en sus warnings. Si en el futuro se usan, hay que crear los recursos y declararlos en `wrangler.jsonc`.
+
+`.dev.vars` se añadió a `.gitignore` para poder guardar secretos locales sin subirlos.
+
 ## Verificación realizada
 
 | Comando | Resultado |

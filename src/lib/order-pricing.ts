@@ -1,10 +1,12 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { collections } from '../data/collections';
 import { estimateShipping, resolveSize } from '../data/pricing';
 
 /**
  * Cálculo de pedidos del lado del servidor.
  * Nunca confía en los precios que envía el navegador: busca el SKU en el
- * catálogo, resuelve el precio real y vuelve a sumar subtotal, envío y total.
+ * catálogo (base de datos primero, datos estáticos como respaldo), resuelve
+ * el precio real y vuelve a sumar subtotal, envío y total.
  */
 
 export const MAX_ITEM_QTY = 24;
@@ -26,7 +28,9 @@ export type PricedOrderItem = {
 
 export type PricedOrder = {
   items: PricedOrderItem[];
+  /** Subtotal bruto, antes del descuento del cupón. */
   subtotalCop: number;
+  discountCop: number;
   shippingCop: number;
   totalCop: number;
   totalUnits: number;
@@ -40,7 +44,21 @@ type CatalogVariant = {
   unitPriceCop: number;
 };
 
-export function findCatalogVariant(sku: string): CatalogVariant | null {
+type Row = Record<string, unknown>;
+
+const asRow = (value: unknown): Row =>
+  value && typeof value === 'object' ? (value as Row) : {};
+
+const text = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const num = (value: unknown, fallback = 0): number => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+/** Busca el SKU en los datos estáticos del sitio (respaldo sin BD). */
+function findStaticVariant(sku: string): CatalogVariant | null {
   for (const collection of collections) {
     for (const size of collection.sizes) {
       if (size.sku !== sku) continue;
@@ -58,9 +76,59 @@ export function findCatalogVariant(sku: string): CatalogVariant | null {
   return null;
 }
 
+/**
+ * Busca el SKU en `product_variants` (solo variantes activas de productos
+ * publicados). Si la consulta falla, se usa el catálogo estático.
+ */
+export async function findCatalogVariant(
+  sku: string,
+  supabase?: SupabaseClient | null,
+): Promise<CatalogVariant | null> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('product_variants')
+        .select('sku, size_label, weight_g, price_cop, products(name, is_active, archived_at)')
+        .eq('sku', sku)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!error && data) {
+        const row = asRow(data);
+        const product = asRow(row.products);
+        const price = num(row.price_cop);
+        // Producto borrador/archivado o sin precio: no está disponible.
+        if (!product.is_active || product.archived_at != null || price <= 0) return null;
+        return {
+          sku: text(row.sku, sku),
+          productName: text(product.name, 'Vela'),
+          sizeLabel: text(row.size_label),
+          weightG: num(row.weight_g),
+          unitPriceCop: price,
+        };
+      }
+      // Sin error pero sin fila: puede ser un SKU eliminado (no disponible)
+      // o una base sin sembrar. Si la tabla está vacía, respaldo estático.
+      if (!error) {
+        const { count } = await supabase
+          .from('product_variants')
+          .select('id', { count: 'exact', head: true });
+        if ((count ?? 0) > 0) return null;
+      }
+    } catch (error) {
+      console.error('[order-pricing] Variante:', error);
+    }
+  }
+  return findStaticVariant(sku);
+}
+
 type PriceResult = { ok: true; order: PricedOrder } | { ok: false; error: string };
 
-export function priceOrderItems(rawItems: unknown): PriceResult {
+export async function priceOrderItems(
+  rawItems: unknown,
+  supabase?: SupabaseClient | null,
+  discountCop = 0,
+): Promise<PriceResult> {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     return { ok: false, error: 'Tu carrito está vacío.' };
   }
@@ -86,7 +154,7 @@ export function priceOrderItems(rawItems: unknown): PriceResult {
   const items: PricedOrderItem[] = [];
 
   for (const [sku, qty] of merged) {
-    const variant = findCatalogVariant(sku);
+    const variant = await findCatalogVariant(sku, supabase);
     if (!variant) {
       return {
         ok: false,
@@ -118,15 +186,18 @@ export function priceOrderItems(rawItems: unknown): PriceResult {
   }
 
   const subtotalCop = items.reduce((sum, item) => sum + item.subtotalCop, 0);
-  const shipping = estimateShipping(subtotalCop);
+  const discount = Math.min(subtotalCop, Math.max(0, Math.round(discountCop)));
+  // El descuento se aplica antes de calcular el envío y su umbral de gratis.
+  const shipping = estimateShipping(subtotalCop - discount);
 
   return {
     ok: true,
     order: {
       items,
       subtotalCop,
+      discountCop: discount,
       shippingCop: shipping.costCop,
-      totalCop: subtotalCop + shipping.costCop,
+      totalCop: subtotalCop - discount + shipping.costCop,
       totalUnits,
     },
   };

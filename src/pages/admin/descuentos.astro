@@ -1,0 +1,671 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import { CAMPAIGN_STATUS_LABELS, resolveCampaignStatus } from '../../lib/promotions';
+import { collections } from '../../data/collections';
+import { resolveSize } from '../../data/pricing';
+import { demoCampaigns } from '../../data/admin-demo';
+import { getCampaigns, getCustomers } from '../../lib/admin-data';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+const campaigns = supabase ? await getCampaigns(supabase) : demoCampaigns;
+const customers = supabase ? await getCustomers(supabase) : [];
+
+const now = new Date();
+const statuses = campaigns.map((campaign) => resolveCampaignStatus(campaign, now));
+const activeCount = statuses.filter((status) => status === 'active').length;
+const scheduledCount = statuses.filter((status) => status === 'scheduled').length;
+const finishedCount = statuses.filter((status) => status === 'finished').length;
+const totalUses = campaigns.reduce((sum, campaign) => sum + campaign.uses, 0);
+
+const catalog = collections.map((collection) => ({
+  slug: collection.slug,
+  name: collection.name,
+  products: collection.sizes
+    .map(resolveSize)
+    .filter((size) => size.priceCop !== null)
+    .map((size) => ({ sku: size.sku, label: `${collection.name} · ${size.label}` })),
+}));
+
+---
+
+<AdminLayout title="Descuentos automáticos" section="Descuentos">
+  <PageHeader
+    eyebrow="Catálogo"
+    title="Descuentos automáticos"
+    description="Campañas por temporada sin códigos: se activan y desactivan solas según su vigencia."
+  >
+    <button type="button" slot="actions" class="admin-btn admin-btn-primary" data-new-campaign>
+      <AdminIcon name="plus" size={15} />
+      Nueva campaña
+    </button>
+  </PageHeader>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard label="Activas" value={String(activeCount)} icon="percent" hint="vigencia en curso" />
+    <StatCard label="Programadas" value={String(scheduledCount)} icon="calendar" hint="inician pronto" />
+    <StatCard label="Finalizadas" value={String(finishedCount)} icon="clock" hint="fuera de vigencia" />
+    <StatCard label="Usos totales" value={String(totalUses)} icon="tag" hint={`${campaigns.length} campañas`} />
+  </section>
+
+  <section class="admin-card mt-5">
+    <div class="admin-card-head flex-wrap gap-3">
+      <div>
+        <h2 class="admin-card-title">Campañas</h2>
+        <p class="mt-0.5 text-[0.7rem] text-ink/45">
+          El cambio de programada a activa y de activa a finalizada es automático; la pausa es manual.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Filtrar campañas">
+        {['all', 'active', 'scheduled', 'paused', 'finished'].map((filter) => (
+          <button
+            type="button"
+            class:list={['admin-btn', 'admin-btn-ghost', 'admin-btn-sm', filter === 'all' && 'is-active']}
+            data-filter={filter}
+          >
+            {filter === 'all' ? 'Todas' : CAMPAIGN_STATUS_LABELS[filter as keyof typeof CAMPAIGN_STATUS_LABELS]}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Campaña</th>
+            <th class="num">Descuento</th>
+            <th>Aplicación</th>
+            <th class="num">Mínimo</th>
+            <th>Vigencia</th>
+            <th>Clientes</th>
+            <th class="num">Usos</th>
+            <th>Estado</th>
+            <th class="text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="campaigns-body"></tbody>
+      </table>
+      {campaigns.length === 0 && (
+        <p class="px-5 py-6 text-center text-[0.75rem] text-ink/45">
+          Todavía no hay campañas. Usa una plantilla o crea la primera.
+        </p>
+      )}
+    </div>
+  </section>
+
+  <section class="admin-card mt-5">
+    <div class="admin-card-head">
+      <div>
+        <h2 class="admin-card-title">Plantillas rápidas</h2>
+        <p class="mt-0.5 text-[0.7rem] text-ink/45">Carga una campaña de ejemplo y ajústala antes de guardar.</p>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 p-5 pt-0">
+      <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-template="navidad">Navidad · 15 %</button>
+      <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-template="valentin">San Valentín · 20 % colección</button>
+      <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-template="madre">Día de la Madre · productos</button>
+      <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-template="temporada">Temporada · toda la tienda</button>
+    </div>
+  </section>
+
+  <div class="mt-5 grid gap-5 lg:grid-cols-2">
+    <section class="admin-card">
+      <div class="admin-card-head">
+        <div>
+          <h2 class="admin-card-title">Probar una campaña</h2>
+          <p class="mt-0.5 text-[0.7rem] text-ink/45">Simula un carrito para ver si aplicaría.</p>
+        </div>
+      </div>
+      <div class="grid gap-4 p-5 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label class="admin-label" for="sim-campaign">Campaña</label>
+          <select id="sim-campaign" class="admin-select"></select>
+        </div>
+        <div>
+          <label class="admin-label" for="sim-subtotal">Subtotal del carrito (COP)</label>
+          <input id="sim-subtotal" type="number" min="0" step="1000" value="200000" class="admin-input" />
+        </div>
+        <div>
+          <label class="admin-label" for="sim-customer">Cliente</label>
+          <select id="sim-customer" class="admin-select">
+            <option value="">Anónimo</option>
+            {customers.map((customer) => <option value={customer.id}>{customer.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="admin-label" for="sim-collection">Colección</label>
+          <select id="sim-collection" class="admin-select">
+            <option value="">Ninguna</option>
+            {catalog.map((item) => <option value={item.slug}>{item.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="admin-label" for="sim-product">Producto (SKU)</label>
+          <select id="sim-product" class="admin-select">
+            <option value="">Ninguno</option>
+            {catalog.flatMap((item) => item.products).map((product) => (
+              <option value={product.sku}>{product.label}</option>
+            ))}
+          </select>
+        </div>
+        <div class="sm:col-span-2">
+          <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-simulate>Comprobar elegibilidad</button>
+          <div id="sim-result" class="admin-hint mt-2 min-h-[2.5rem] rounded-xs bg-cream-100/60 px-3 py-2">
+            Selecciona una campaña y comprueba el resultado.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="admin-card-head">
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-8 w-8 place-items-center rounded-xs bg-amber-50 text-amber-800">
+            <AdminIcon name="alert" size={16} />
+          </span>
+          <div>
+            <h2 class="admin-card-title">Promociones 2x1 y por cantidad</h2>
+            <p class="text-[0.68rem] text-ink/45">Requieren integración con el motor de precios</p>
+          </div>
+        </div>
+      </div>
+      <div class="p-5 pt-0 text-[0.73rem] leading-relaxed text-ink/60">
+        <p>
+          El carrito calcula cada línea como <strong>precio unitario × cantidad</strong> y el checkout vuelve a
+          calcular el pedido desde el catálogo, sin aplicar descuentos. Por eso un 2x1 o un descuento por
+          cantidad todavía <strong>no se puede aplicar correctamente</strong>: mostrarlo como activo cobraría
+          de más al cliente.
+        </p>
+        <p class="mt-3">
+          Estas opciones aparecen deshabilitadas en el formulario. Para habilitarlas hay que añadir una
+          etapa de promociones compartida entre <code>src/lib/cart.ts</code> y <code>src/lib/order-pricing.ts</code>,
+          con reglas de cantidad por SKU y recálculo del subtotal y del envío gratis.
+        </p>
+        <p class="mt-3 text-terracotta-700">
+          Mientras tanto, las campañas de porcentaje y valor fijo tampoco se aplican solas en el checkout:
+          esta herramienta administra y simula las reglas, pero la aplicación de precios sigue pendiente.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal campaña -->
+  <div id="campaign-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="campaign-modal-title">
+    <form id="campaign-form" class="admin-modal-panel">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Descuentos automáticos</p>
+          <h2 id="campaign-modal-title" class="admin-card-title mt-1">Nueva campaña</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="campaign-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+
+      <div class="admin-modal-body grid gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label class="admin-label" for="camp-name">Nombre</label>
+          <input id="camp-name" data-field="name" required class="admin-input" placeholder="Navidad" />
+        </div>
+        <div>
+          <label class="admin-label" for="camp-type">Tipo</label>
+          <select id="camp-type" data-field="type" class="admin-select">
+            <option value="percent">Porcentaje</option>
+            <option value="fixed">Valor fijo</option>
+            <option value="bogo" disabled>2x1 · no disponible todavía</option>
+            <option value="quantity" disabled>Descuento por cantidad · no disponible todavía</option>
+          </select>
+        </div>
+        <div>
+          <label class="admin-label" for="camp-value">Valor</label>
+          <input id="camp-value" data-field="value" type="number" min="1" required class="admin-input" placeholder="15" />
+          <p class="admin-hint">Porcentaje o monto en COP según el tipo.</p>
+        </div>
+        <div>
+          <label class="admin-label" for="camp-application">Aplicación</label>
+          <select id="camp-application" data-field="application" class="admin-select">
+            <option value="store">Toda la tienda</option>
+            <option value="collection">Colecciones</option>
+            <option value="product">Productos</option>
+          </select>
+        </div>
+        <div>
+          <label class="admin-label" for="camp-min">Compra mínima (COP)</label>
+          <input id="camp-min" data-field="min" type="number" min="0" step="1000" value="0" class="admin-input" />
+        </div>
+        <div class="sm:col-span-2" id="camp-targets-wrap" hidden>
+          <label class="admin-label" for="camp-targets">Aplicación específica</label>
+          <select id="camp-targets" data-field="targets" multiple size="5" class="admin-select"></select>
+          <p class="admin-hint">Selecciona una o varias opciones con Ctrl/Cmd + clic.</p>
+        </div>
+        <div>
+          <label class="admin-label" for="camp-starts">Fecha inicial</label>
+          <input id="camp-starts" data-field="starts" type="datetime-local" required class="admin-input" />
+        </div>
+        <div>
+          <label class="admin-label" for="camp-ends">Fecha final</label>
+          <input id="camp-ends" data-field="ends" type="datetime-local" required class="admin-input" />
+        </div>
+        <div>
+          <label class="admin-label" for="camp-limit">Límite de usos</label>
+          <input id="camp-limit" data-field="limit" type="number" min="1" class="admin-input" placeholder="Sin límite" />
+        </div>
+        <div>
+          <label class="admin-label" for="camp-customers">Clientes</label>
+          <select id="camp-customers" data-field="customers" class="admin-select">
+            <option value="all">Todos</option>
+            <option value="selected">Clientes seleccionados</option>
+          </select>
+        </div>
+        <div class="sm:col-span-2" id="camp-customer-ids-wrap" hidden>
+          <label class="admin-label" for="camp-customer-ids">Seleccionar clientes</label>
+          <select id="camp-customer-ids" data-field="customerIds" multiple size="5" class="admin-select">
+            {customers.map((customer) => <option value={customer.id}>{customer.name}</option>)}
+          </select>
+        </div>
+        <label class="flex items-center gap-2 text-[0.75rem] text-ink/60 sm:col-span-2">
+          <input type="checkbox" data-field="state" checked class="h-3.5 w-3.5 accent-jade-900" />
+          Habilitada (si está pausada, no se aplica aunque esté en vigencia)
+        </label>
+      </div>
+
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="campaign-modal">Cancelar</button>
+        <button type="submit" class="admin-btn admin-btn-primary" data-save-campaign>Guardar campaña</button>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script type="application/json" id="campaigns-data" set:html={JSON.stringify(campaigns)}></script>
+<script type="application/json" id="catalog-data" set:html={JSON.stringify(catalog)}></script>
+
+<script>
+  import { formatCOP, formatDateTime } from '../../lib/admin';
+  import {
+    CAMPAIGN_STATUS_LABELS,
+    CAMPAIGN_STATUS_TONES,
+    checkCampaignEligibility,
+    resolveCampaignStatus,
+    type CampaignStatus,
+  } from '../../lib/promotions';
+
+  type Campaign = {
+    id: string;
+    name: string;
+    type: 'percent' | 'fixed';
+    value: number;
+    application: 'store' | 'collection' | 'product';
+    targets: string[];
+    minTotalCop: number;
+    startsAt: string;
+    endsAt: string;
+    usageLimit: number | null;
+    uses: number;
+    customers: 'all' | 'selected';
+    customerIds: string[];
+    state: 'enabled' | 'paused';
+    createdAt: string;
+  };
+  type CatalogItem = { slug: string; name: string; products: { sku: string; label: string }[] };
+
+  const readJson = <T,>(id: string): T =>
+    JSON.parse(document.getElementById(id)?.textContent ?? '[]') as T;
+
+  const campaigns = readJson<Campaign[]>('campaigns-data');
+  const catalog = readJson<CatalogItem[]>('catalog-data');
+  const byId = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+  const tbody = document.getElementById('campaigns-body');
+  const form = document.getElementById('campaign-form') as HTMLFormElement | null;
+  const modalTitle = document.getElementById('campaign-modal-title');
+  const saveButton = document.querySelector<HTMLButtonElement>('[data-save-campaign]');
+  let editingId: string | null = null;
+  let activeFilter = 'all';
+
+  const escapeHtml = (value: unknown): string =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const valueLabel = (campaign: Campaign): string =>
+    campaign.type === 'percent' ? `${campaign.value}%` : formatCOP(campaign.value);
+
+  const targetLabels = (campaign: Campaign): string => {
+    if (campaign.application === 'store' || campaign.targets.length === 0) return 'Toda la tienda';
+    if (campaign.application === 'collection') {
+      return campaign.targets
+        .map((slug) => catalog.find((item) => item.slug === slug)?.name ?? slug)
+        .join(', ');
+    }
+    const products = catalog.flatMap((item) => item.products);
+    return campaign.targets
+      .map((sku) => products.find((item) => item.sku === sku)?.label ?? sku)
+      .join(', ');
+  };
+
+  const campaignStatus = (campaign: Campaign): CampaignStatus => resolveCampaignStatus(campaign);
+
+  function rowHtml(campaign: Campaign): string {
+    const status = campaignStatus(campaign);
+    return `
+      <tr data-campaign-row="${escapeHtml(campaign.id)}">
+        <td>
+          <span class="font-medium text-ink/75">${escapeHtml(campaign.name)}</span>
+          <span class="block text-[0.62rem] text-ink/40">${escapeHtml(valueLabel(campaign))} · ${campaign.customers === 'all' ? 'Todos los clientes' : `${campaign.customerIds.length} seleccionados`}</span>
+        </td>
+        <td class="num font-medium text-jade-900">${valueLabel(campaign)}</td>
+        <td class="text-ink/55">
+          ${campaign.application === 'store' ? 'Toda la tienda' : campaign.application === 'collection' ? 'Colecciones' : 'Productos'}
+          <span class="block text-[0.62rem] text-ink/40">${escapeHtml(targetLabels(campaign))}</span>
+        </td>
+        <td class="num text-ink/50">${campaign.minTotalCop ? formatCOP(campaign.minTotalCop) : '—'}</td>
+        <td class="whitespace-nowrap text-ink/55">${formatDateTime(campaign.startsAt)} — ${formatDateTime(campaign.endsAt)}</td>
+        <td class="text-ink/55">${campaign.customers === 'all' ? 'Todos' : 'Seleccionados'}</td>
+        <td class="num text-ink/60">${campaign.uses}${campaign.usageLimit ? ` / ${campaign.usageLimit}` : ''}</td>
+        <td>
+          <span class="admin-badge" data-tone="${CAMPAIGN_STATUS_TONES[status]}" data-campaign-status>${CAMPAIGN_STATUS_LABELS[status]}</span>
+        </td>
+        <td>
+          <div class="flex items-center justify-end gap-2">
+            <button type="button" class="admin-switch ${campaign.state === 'enabled' ? 'is-on' : ''}" data-toggle-campaign="${escapeHtml(campaign.id)}" role="switch" aria-checked="${campaign.state === 'enabled'}" aria-label="Pausar o habilitar ${escapeHtml(campaign.name)}"></button>
+            <button type="button" class="admin-icon-btn" data-edit-campaign="${escapeHtml(campaign.id)}" title="Editar" aria-label="Editar ${escapeHtml(campaign.name)}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+            </button>
+            <button type="button" class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700" data-delete-campaign="${escapeHtml(campaign.id)}" title="Eliminar" aria-label="Eliminar ${escapeHtml(campaign.name)}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function render() {
+    if (!tbody) return;
+    const visible = campaigns.filter((campaign) => activeFilter === 'all' || campaignStatus(campaign) === activeFilter);
+    tbody.innerHTML = visible.length
+      ? visible.map(rowHtml).join('')
+      : '<tr><td colspan="9" class="py-6 text-center text-[0.75rem] text-ink/45">No hay campañas con este estado.</td></tr>';
+
+    const select = document.getElementById('sim-campaign') as HTMLSelectElement | null;
+    if (select) {
+      const current = select.value;
+      select.innerHTML = campaigns
+        .map((campaign) => `<option value="${escapeHtml(campaign.id)}">${escapeHtml(campaign.name)}</option>`)
+        .join('');
+      if (current && byId.has(current)) select.value = current;
+    }
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+      activeFilter = button.dataset.filter ?? 'all';
+      document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((item) => {
+        item.classList.toggle('is-active', item === button);
+      });
+      render();
+    });
+  });
+
+  function field(name: string): HTMLInputElement | HTMLSelectElement | null {
+    return form?.querySelector(`[data-field="${name}"]`) as HTMLInputElement | HTMLSelectElement | null;
+  }
+
+  function syncConditionalFields() {
+    const application = field('application')?.value ?? 'store';
+    const targetsWrap = document.getElementById('camp-targets-wrap');
+    const targets = field('targets') as HTMLSelectElement | null;
+    if (targetsWrap) targetsWrap.hidden = application === 'store';
+    if (targets) {
+      targets.innerHTML = catalog
+        .flatMap((item) =>
+          application === 'collection'
+            ? [{ value: item.slug, label: item.name }]
+            : item.products.map((product) => ({ value: product.sku, label: product.label })),
+        )
+        .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+        .join('');
+    }
+
+    const customersMode = field('customers')?.value ?? 'all';
+    const idsWrap = document.getElementById('camp-customer-ids-wrap');
+    if (idsWrap) idsWrap.hidden = customersMode !== 'selected';
+  }
+
+  function prefill(template: string) {
+    const today = new Date();
+    const iso = (date: Date) => date.toISOString().slice(0, 16);
+    const inDays = (days: number) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() + days);
+      return iso(date);
+    };
+    const templates: Record<string, Partial<Campaign>> = {
+      navidad: { name: 'Navidad', type: 'percent', value: 15, application: 'store', targets: [], minTotalCop: 0, startsAt: inDays(10), endsAt: inDays(40) },
+      valentin: { name: 'San Valentín', type: 'percent', value: 20, application: 'collection', targets: ['esencia-del-valle'], minTotalCop: 120000, startsAt: inDays(60), endsAt: inDays(74) },
+      madre: { name: 'Día de la Madre', type: 'percent', value: 15, application: 'product', targets: ['IRIS-LUZ-120', 'IRIS-LUZ-240'], minTotalCop: 0, startsAt: inDays(120), endsAt: inDays(128) },
+      temporada: { name: 'Temporada especial', type: 'fixed', value: 12000, application: 'store', targets: [], minTotalCop: 180000, startsAt: inDays(1), endsAt: inDays(15) },
+    };
+    const data = templates[template];
+    if (!data) return;
+    openModal();
+    const values: Record<string, string> = {
+      name: data.name ?? '',
+      type: data.type ?? 'percent',
+      value: String(data.value ?? 15),
+      application: data.application ?? 'store',
+      min: String(data.minTotalCop ?? 0),
+      starts: data.startsAt ?? '',
+      ends: data.endsAt ?? '',
+      limit: data.usageLimit ? String(data.usageLimit) : '',
+      customers: data.customers ?? 'all',
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const input = field(key);
+      if (input) input.value = value;
+    });
+    syncConditionalFields();
+    const targets = field('targets') as HTMLSelectElement | null;
+    if (targets && data.targets) {
+      Array.from(targets.options).forEach((option) => {
+        option.selected = data.targets!.includes(option.value);
+      });
+    }
+  }
+
+  function openModal(campaign?: Campaign) {
+    if (!form) return;
+    editingId = campaign?.id ?? null;
+    if (modalTitle) modalTitle.textContent = campaign ? `Editar ${campaign.name}` : 'Nueva campaña';
+    if (saveButton) saveButton.textContent = campaign ? 'Guardar cambios' : 'Crear campaña';
+
+    const values: Record<string, string> = {
+      name: campaign?.name ?? '',
+      type: campaign?.type ?? 'percent',
+      value: String(campaign?.value ?? 15),
+      application: campaign?.application ?? 'store',
+      min: String(campaign?.minTotalCop ?? 0),
+      starts: campaign?.startsAt ?? '',
+      ends: campaign?.endsAt ?? '',
+      limit: campaign?.usageLimit ? String(campaign.usageLimit) : '',
+      customers: campaign?.customers ?? 'all',
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const input = field(key);
+      if (input) input.value = value;
+    });
+    const state = field('state') as HTMLInputElement | null;
+    if (state) state.checked = campaign?.state !== 'paused';
+    syncConditionalFields();
+
+    const targets = field('targets') as HTMLSelectElement | null;
+    if (targets && campaign?.targets) {
+      Array.from(targets.options).forEach((option) => {
+        option.selected = campaign.targets.includes(option.value);
+      });
+    }
+    const ids = field('customerIds') as HTMLSelectElement | null;
+    if (ids && campaign?.customerIds) {
+      Array.from(ids.options).forEach((option) => {
+        option.selected = campaign.customerIds.includes(option.value);
+      });
+    }
+    (window as any).openAdminModal('campaign-modal');
+  }
+
+  field('application')?.addEventListener('change', syncConditionalFields);
+  field('customers')?.addEventListener('change', syncConditionalFields);
+
+  tbody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+
+    const toggle = target.closest<HTMLButtonElement>('[data-toggle-campaign]');
+    if (toggle) {
+      const campaign = byId.get(toggle.dataset.toggleCampaign ?? '');
+      if (!campaign) return;
+      campaign.state = campaign.state === 'enabled' ? 'paused' : 'enabled';
+      const status = campaignStatus(campaign);
+      toggle.classList.toggle('is-on', campaign.state === 'enabled');
+      toggle.setAttribute('aria-checked', String(campaign.state === 'enabled'));
+      const badge = toggle.closest('tr')?.querySelector<HTMLElement>('[data-campaign-status]');
+      if (badge) {
+        badge.textContent = CAMPAIGN_STATUS_LABELS[status];
+        badge.dataset.tone = CAMPAIGN_STATUS_TONES[status];
+      }
+      (window as any).adminToast(`Campaña ${campaign.name} ${campaign.state === 'enabled' ? 'habilitada' : 'pausada'} (demo).`);
+      return;
+    }
+
+    const edit = target.closest<HTMLButtonElement>('[data-edit-campaign]');
+    if (edit) {
+      const campaign = byId.get(edit.dataset.editCampaign ?? '');
+      if (campaign) openModal(campaign);
+      return;
+    }
+
+    const remove = target.closest<HTMLButtonElement>('[data-delete-campaign]');
+    if (remove) {
+      const campaign = byId.get(remove.dataset.deleteCampaign ?? '');
+      if (!campaign) return;
+      if (!window.confirm(`¿Eliminar la campaña ${campaign.name}?`)) return;
+      byId.delete(campaign.id);
+      const index = campaigns.findIndex((item) => item.id === campaign.id);
+      if (index >= 0) campaigns.splice(index, 1);
+      render();
+      (window as any).adminToast(`Campaña ${campaign.name} eliminada (demo).`, 'warn');
+    }
+  });
+
+  document.querySelector('[data-new-campaign]')?.addEventListener('click', () => openModal());
+  document.querySelectorAll<HTMLButtonElement>('[data-template]').forEach((button) => {
+    button.addEventListener('click', () => prefill(button.dataset.template ?? ''));
+  });
+
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+
+    const name = (field('name')?.value ?? '').trim();
+    const startsAt = field('starts')?.value ?? '';
+    const endsAt = field('ends')?.value ?? '';
+    if (!name || !startsAt || !endsAt) return;
+    if (Date.parse(endsAt) <= Date.parse(startsAt)) {
+      (window as any).adminToast('La fecha final debe ser posterior a la inicial.', 'warn');
+      return;
+    }
+
+    const selectedTargets = Array.from((field('targets') as HTMLSelectElement | null)?.selectedOptions ?? []).map(
+      (option) => option.value,
+    );
+    const selectedCustomers = Array.from((field('customerIds') as HTMLSelectElement | null)?.selectedOptions ?? []).map(
+      (option) => option.value,
+    );
+    const customersMode = field('customers')?.value ?? 'all';
+    if (customersMode === 'selected' && selectedCustomers.length === 0) {
+      (window as any).adminToast('Selecciona al menos un cliente.', 'warn');
+      return;
+    }
+    const application = field('application')?.value as Campaign['application'];
+    if (application !== 'store' && selectedTargets.length === 0) {
+      (window as any).adminToast('Selecciona al menos una colección o producto.', 'warn');
+      return;
+    }
+
+    const campaign: Campaign = {
+      id: editingId ?? `campaign-${Date.now()}`,
+      name,
+      type: (field('type')?.value ?? 'percent') as Campaign['type'],
+      value: Number(field('value')?.value ?? 0),
+      application,
+      targets: application === 'store' ? [] : selectedTargets,
+      minTotalCop: Number(field('min')?.value ?? 0),
+      startsAt,
+      endsAt,
+      usageLimit: field('limit')?.value ? Number(field('limit')?.value) : null,
+      uses: editingId ? byId.get(editingId)?.uses ?? 0 : 0,
+      customers: customersMode === 'selected' ? 'selected' : 'all',
+      customerIds: customersMode === 'selected' ? selectedCustomers : [],
+      state: (field('state') as HTMLInputElement | null)?.checked ? 'enabled' : 'paused',
+      createdAt: editingId ? byId.get(editingId)?.createdAt ?? '' : new Date().toISOString(),
+    };
+
+    if (editingId && byId.has(editingId)) {
+      const existing = byId.get(editingId);
+      if (existing) Object.assign(existing, campaign);
+      (window as any).adminToast(`Campaña ${campaign.name} actualizada (demo).`);
+    } else {
+      campaigns.push(campaign);
+      byId.set(campaign.id, campaign);
+      (window as any).adminToast(`Campaña ${campaign.name} creada con estado ${CAMPAIGN_STATUS_LABELS[campaignStatus(campaign)]} (demo).`);
+    }
+    render();
+    (window as any).closeAdminModal('campaign-modal');
+  });
+
+  document.querySelector('[data-simulate]')?.addEventListener('click', () => {
+    const result = document.getElementById('sim-result');
+    if (!result) return;
+    const campaign = byId.get((document.getElementById('sim-campaign') as HTMLSelectElement | null)?.value ?? '');
+    if (!campaign) {
+      result.textContent = 'Selecciona una campaña.';
+      return;
+    }
+    const check = checkCampaignEligibility(campaign, {
+      cartSubtotalCop: Number((document.getElementById('sim-subtotal') as HTMLInputElement | null)?.value ?? 0),
+      customerId: (document.getElementById('sim-customer') as HTMLSelectElement | null)?.value || null,
+      collectionSlug: (document.getElementById('sim-collection') as HTMLSelectElement | null)?.value || undefined,
+      productSlug: (document.getElementById('sim-product') as HTMLSelectElement | null)?.value || undefined,
+    });
+    result.innerHTML = check.ok
+      ? `<span class="text-jade-700">Sí aplica · ${escapeHtml(campaign.name)}: ${escapeHtml(valueLabel(campaign))} de descuento</span>`
+      : `<span class="text-terracotta-700">No aplica · ${escapeHtml(check.reason)}</span>`;
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.closeModal;
+      if (id) (window as any).closeAdminModal(id);
+    });
+  });
+
+  // Recalcula estados periódicamente: programada → activa → finalizada sin recargar.
+  render();
+  window.setInterval(() => {
+    document.querySelectorAll<HTMLTableRowElement>('[data-campaign-row]').forEach((row) => {
+      const campaign = byId.get(row.dataset.campaignRow ?? '');
+      const badge = row.querySelector<HTMLElement>('[data-campaign-status]');
+      if (!campaign || !badge) return;
+      const status = campaignStatus(campaign);
+      badge.textContent = CAMPAIGN_STATUS_LABELS[status];
+      badge.dataset.tone = CAMPAIGN_STATUS_TONES[status];
+    });
+  }, 30_000);
+</script>

@@ -6,6 +6,7 @@ import { formatDate, isDemoMode, ROLE_LABELS, type AdminRole } from '../../lib/a
 import { demoShippingZones, demoAdminUsers } from '../../data/admin-demo';
 import { getAdminUsers, getShippingZones } from '../../lib/admin-data';
 import { createSupabaseServer } from '../../lib/supabase-server';
+import { isResendConfigured } from '../../lib/resend';
 
 export const prerender = false;
 
@@ -64,7 +65,7 @@ const connectionItems = [
     name: 'Resend',
     role: 'Correos transaccionales y campañas',
     env: ['RESEND_API_KEY', 'RESEND_FROM_EMAIL'],
-    configured: false,
+    configured: await isResendConfigured(),
     href: 'https://resend.com/api-keys',
   },
   {

@@ -1,0 +1,883 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import StatCard from '../../components/admin/StatCard.astro';
+import AdminIcon from '../../components/admin/AdminIcon.astro';
+import {
+  formatBytes,
+  formatDate,
+  getMediaAssets,
+  getMediaTargets,
+  MEDIA_BUCKETS,
+  type MediaAsset,
+} from '../../lib/media-library';
+import { createSupabaseServer } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+const supabase = createSupabaseServer(Astro);
+let schemaReady = true;
+if (supabase) {
+  const { error } = await supabase.from('media_assets').select('id', { count: 'exact', head: true });
+  schemaReady = !error;
+}
+const assets: MediaAsset[] = supabase && schemaReady ? await getMediaAssets(supabase) : [];
+const targets = supabase
+  ? await getMediaTargets(supabase)
+  : { products: [] as [], collections: [] as [] };
+
+const totalBytes = assets.reduce((sum, asset) => sum + asset.sizeBytes, 0);
+const inUse = assets.filter((asset) => asset.usages.length > 0).length;
+const unused = assets.length - inUse;
+
+// Evita que un nombre de archivo malicioso cierre la etiqueta JSON.
+const safeJson = (value: unknown): string =>
+  JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+
+const mimeLabel = (mime: string): string => mime.split('/')[1]?.toUpperCase() ?? 'IMG';
+const bucketLabel = (bucket: string): string =>
+  bucket === 'collection-images' ? 'Colección' : 'Producto';
+---
+
+<AdminLayout title="Biblioteca multimedia" section="Biblioteca multimedia">
+  <PageHeader
+    eyebrow="Catálogo"
+    title="Biblioteca multimedia"
+    description="Sube, busca y reutiliza las fotografías de la tienda. Reemplazar una imagen conserva su URL, así que los productos y colecciones que la usan siguen funcionando."
+  >
+    <button type="button" slot="actions" class="admin-btn admin-btn-primary" data-open-upload>
+      <AdminIcon name="plus" size={15} />
+      Subir imágenes
+    </button>
+  </PageHeader>
+
+  {
+    (!supabase || !schemaReady) && (
+      <div class="admin-notice mb-5">
+        <AdminIcon name="alert" size={16} />
+        <span>
+          {supabase ? (
+            <>
+              Falta la tabla <code>media_assets</code>. Ejecuta <code>db/media-library.sql</code>{' '}
+              en el SQL Editor de Supabase (después de <code>db/setup.sql</code>).
+            </>
+          ) : (
+            <>
+              La biblioteca necesita Supabase. Configura las variables de entorno y ejecuta{' '}
+              <code>db/media-library.sql</code> en el SQL Editor.
+            </>
+          )}
+        </span>
+      </div>
+    )
+  }
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <StatCard label="Imágenes" value={String(assets.length)} icon="grid" hint="en la biblioteca" />
+    <StatCard label="En uso" value={String(inUse)} icon="check" hint="referenciadas" />
+    <StatCard label="Sin usar" value={String(unused)} icon="trash" hint="se pueden eliminar" />
+    <StatCard label="Espacio usado" value={formatBytes(totalBytes)} icon="box" hint="en Storage" />
+  </section>
+
+  <section class="admin-card mt-5">
+    <div class="admin-card-head gap-3">
+      <div class="relative w-full sm:max-w-xs">
+        <AdminIcon
+          name="search"
+          size={15}
+          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/35"
+        />
+        <input
+          type="search"
+          id="media-search"
+          class="admin-input pl-9"
+          placeholder="Buscar por nombre…"
+          aria-label="Buscar imágenes por nombre"
+        />
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button type="button" class="admin-chip is-active" data-media-filter="all">Todas</button>
+        <button type="button" class="admin-chip" data-media-filter="used">En uso <span class="count">{inUse}</span></button>
+        <button type="button" class="admin-chip" data-media-filter="unused">Sin usar <span class="count">{unused}</span></button>
+      </div>
+    </div>
+
+    <div class="p-4">
+      {
+        assets.length === 0 ? (
+          <div class="media-empty">
+            <AdminIcon name="grid" size={26} />
+            <p class="mt-3 font-medium text-jade-900">Todavía no hay imágenes</p>
+            <p class="mt-1 text-[0.75rem] text-ink/55">
+              Sube tus fotografías para usarlas en productos y colecciones.
+            </p>
+          </div>
+        ) : (
+          <div id="media-grid" class="media-grid">
+            {assets.map((asset) => (
+              <article
+                class="media-card"
+                data-asset-id={asset.id}
+                data-name={asset.name.toLowerCase()}
+                data-used={asset.usages.length > 0 ? 'true' : 'false'}
+              >
+                <button
+                  type="button"
+                  class="media-thumb"
+                  data-preview={asset.id}
+                  aria-label={`Ver ${asset.name}`}
+                >
+                  <img src={asset.url} alt={asset.alt || asset.name} loading="lazy" />
+                  <span class="media-thumb-format">{mimeLabel(asset.mimeType)}</span>
+                </button>
+                <div class="media-card-body">
+                  <p class="media-name" title={asset.name}>{asset.name}</p>
+                  <p class="media-meta">
+                    {bucketLabel(asset.bucket)} · {formatBytes(asset.sizeBytes)} · {formatDate(asset.updatedAt)}
+                  </p>
+                  <p class:list={['media-usage', asset.usages.length > 0 && 'is-used']}>
+                    {asset.usages.length === 0
+                      ? 'Sin usar'
+                      : asset.usages.length === 1
+                        ? '1 referencia'
+                        : `${asset.usages.length} referencias`}
+                  </p>
+                  <div class="media-actions">
+                    <button type="button" class="admin-icon-btn" data-preview={asset.id} title="Vista previa" aria-label="Vista previa">
+                      <AdminIcon name="eye" size={14} />
+                    </button>
+                    <button type="button" class="admin-icon-btn" data-usage={asset.id} title="Dónde se usa" aria-label="Dónde se usa">
+                      <AdminIcon name="search" size={14} />
+                    </button>
+                    <button type="button" class="admin-icon-btn" data-replace={asset.id} title="Reemplazar" aria-label="Reemplazar">
+                      <AdminIcon name="refresh" size={14} />
+                    </button>
+                    <button type="button" class="admin-icon-btn" data-attach={asset.id} title="Reutilizar en…" aria-label="Reutilizar en">
+                      <AdminIcon name="tag" size={14} />
+                    </button>
+                    <button type="button" class="admin-icon-btn" data-edit={asset.id} title="Renombrar" aria-label="Renombrar">
+                      <AdminIcon name="edit" size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-35"
+                      data-delete={asset.id}
+                      title={asset.usages.length ? 'Quita las referencias antes de eliminar' : 'Eliminar'}
+                      aria-label="Eliminar"
+                      disabled={asset.usages.length > 0}
+                    >
+                      <AdminIcon name="trash" size={14} />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )
+      }
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-cream-300 px-4 py-3 text-[0.68rem] text-ink/45">
+      <span id="media-count">Mostrando {assets.length} imágenes</span>
+      <span>Reemplazar mantiene la misma URL pública.</span>
+    </div>
+  </section>
+
+  <!-- Subir -->
+  <div id="upload-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
+    <div class="admin-modal-panel is-wide">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Biblioteca</p>
+          <h2 id="upload-modal-title" class="admin-card-title mt-1">Subir imágenes</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="upload-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div class="admin-modal-body">
+        <label class="media-dropzone" id="upload-dropzone">
+          <input type="file" id="upload-input" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" multiple class="sr-only" />
+          <AdminIcon name="plus" size={22} />
+          <span class="mt-2 text-sm font-medium text-jade-900">Arrastra imágenes o haz clic para elegirlas</span>
+          <span class="mt-1 text-[0.7rem] text-ink/50">JPG, PNG, WebP, GIF o AVIF · máx. 10 MB por archivo · hasta 12 imágenes</span>
+        </label>
+        <div id="upload-previews" class="media-preview-list mt-4"></div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="admin-label" for="upload-bucket">Tipo de fotografía</label>
+            <select id="upload-bucket" class="admin-select">
+              {Object.entries(MEDIA_BUCKETS).map(([key, label]) => <option value={key}>{label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="admin-label" for="upload-alt">Texto alternativo (opcional)</label>
+            <input id="upload-alt" class="admin-input" placeholder="Ej. Vela Otoño Dorado sobre fondo neutro" />
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="upload-modal">Cancelar</button>
+        <button type="button" class="admin-btn admin-btn-primary" data-confirm-upload disabled>Guardar imágenes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vista previa -->
+  <div id="preview-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+    <div class="admin-modal-panel is-wide">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Vista previa</p>
+          <h2 id="preview-title" class="admin-card-title mt-1">Imagen</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="preview-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div class="admin-modal-body">
+        <img id="preview-image" class="media-preview-image" src="" alt="" />
+        <p id="preview-meta" class="mt-3 text-[0.72rem] text-ink/55"></p>
+      </div>
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="preview-modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reemplazar -->
+  <div id="replace-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="replace-modal-title">
+    <div class="admin-modal-panel is-wide">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Biblioteca</p>
+          <h2 id="replace-modal-title" class="admin-card-title mt-1">Reemplazar imagen</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="replace-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div class="admin-modal-body">
+        <p class="mb-3 text-[0.75rem] leading-relaxed text-ink/60">
+          El archivo nuevo se guarda en la misma ruta. La URL no cambia, así que no se rompen las
+          referencias de productos ni colecciones.
+        </p>
+        <div class="media-compare">
+          <div>
+            <p class="admin-label mb-1">Actual</p>
+            <img id="replace-current" class="media-compare-img" src="" alt="" />
+          </div>
+          <div>
+            <p class="admin-label mb-1">Nueva (vista previa)</p>
+            <div id="replace-next-wrap" class="media-compare-img media-compare-empty">
+              <span class="text-[0.65rem] text-ink/40">Sin seleccionar</span>
+              <img id="replace-next" class="hidden" src="" alt="" />
+            </div>
+          </div>
+        </div>
+        <label class="media-dropzone mt-4" id="replace-dropzone">
+          <input type="file" id="replace-input" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" class="sr-only" />
+          <AdminIcon name="refresh" size={20} />
+          <span class="mt-2 text-sm font-medium text-jade-900">Elige la imagen de reemplazo</span>
+        </label>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="admin-label" for="replace-name">Nombre</label>
+            <input id="replace-name" class="admin-input" />
+          </div>
+          <div>
+            <label class="admin-label" for="replace-alt">Texto alternativo</label>
+            <input id="replace-alt" class="admin-input" />
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="replace-modal">Cancelar</button>
+        <button type="button" class="admin-btn admin-btn-primary" data-confirm-replace disabled>Reemplazar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Renombrar -->
+  <div id="edit-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+    <div class="admin-modal-panel">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Biblioteca</p>
+          <h2 id="edit-modal-title" class="admin-card-title mt-1">Editar ficha</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="edit-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div class="admin-modal-body">
+        <div class="grid gap-3">
+          <div>
+            <label class="admin-label" for="edit-name">Nombre</label>
+            <input id="edit-name" class="admin-input" />
+          </div>
+          <div>
+            <label class="admin-label" for="edit-alt">Texto alternativo</label>
+            <input id="edit-alt" class="admin-input" />
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="edit-modal">Cancelar</button>
+        <button type="button" class="admin-btn admin-btn-primary" data-confirm-edit>Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reutilizar -->
+  <div id="attach-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="attach-modal-title">
+    <div class="admin-modal-panel">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Biblioteca</p>
+          <h2 id="attach-modal-title" class="admin-card-title mt-1">Reutilizar imagen</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="attach-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div class="admin-modal-body">
+        <div class="flex items-center gap-3">
+          <img id="attach-thumb" class="h-16 w-16 rounded-xs border border-cream-300 object-cover" src="" alt="" />
+          <p class="text-[0.75rem] leading-relaxed text-ink/60">
+            La misma imagen puede usarse en varios productos o colecciones sin duplicar el archivo.
+          </p>
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="admin-label" for="attach-type">Usar en</label>
+            <select id="attach-type" class="admin-select">
+              <option value="product">Foto de producto</option>
+              <option value="collection">Galería de colección</option>
+              <option value="collection-hero">Portada de colección</option>
+            </select>
+          </div>
+          <div>
+            <label class="admin-label" for="attach-target">Destino</label>
+            <select id="attach-target" class="admin-select"></select>
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="attach-modal">Cancelar</button>
+        <button type="button" class="admin-btn admin-btn-primary" data-confirm-attach>Asociar imagen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dónde se usa -->
+  <div id="usage-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="usage-modal-title">
+    <div class="admin-modal-panel">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Biblioteca</p>
+          <h2 id="usage-modal-title" class="admin-card-title mt-1">Dónde se usa</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="usage-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div class="admin-modal-body">
+        <div id="usage-list" class="space-y-2"></div>
+      </div>
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="usage-modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script type="application/json" id="media-data" set:html={safeJson({ assets, targets })}></script>
+
+<script>
+  type Usage = {
+    type: 'product' | 'collection' | 'collection-hero' | 'review';
+    id: string;
+    name: string;
+    href: string;
+  };
+  type Asset = {
+    id: string;
+    name: string;
+    fileName: string;
+    bucket: string;
+    path: string;
+    url: string;
+    alt: string;
+    mimeType: string;
+    sizeBytes: number;
+    updatedAt: string;
+    usages: Usage[];
+  };
+  type Targets = {
+    products: { id: string; name: string; slug: string; collection: string }[];
+    collections: { id: string; name: string; slug: string }[];
+  };
+
+  const dataNode = document.getElementById('media-data');
+  const parsed: { assets: Asset[]; targets: Targets } = dataNode
+    ? JSON.parse(dataNode.textContent ?? '{"assets":[],"targets":{"products":[],"collections":[]}}')
+    : { assets: [], targets: { products: [], collections: [] } };
+
+  let assets: Asset[] = parsed.assets;
+  const targets = parsed.targets;
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+
+  const toast = (message: string, tone: 'ok' | 'warn' = 'ok') => (window as any).adminToast(message, tone);
+  const openModal = (id: string) => (window as any).openAdminModal(id);
+  const closeModal = (id: string) => (window as any).closeAdminModal(id);
+
+  const grid = document.getElementById('media-grid');
+  const search = document.getElementById('media-search') as HTMLInputElement | null;
+  const countLabel = document.getElementById('media-count');
+  const chips = document.querySelectorAll<HTMLButtonElement>('[data-media-filter]');
+  const objectUrls: string[] = [];
+
+  let activeFilter = 'all';
+  let uploadFiles: File[] = [];
+  let replaceAssetId: string | null = null;
+  let replaceFile: File | null = null;
+  let editAssetId: string | null = null;
+  let attachAssetId: string | null = null;
+
+  function applyFilters() {
+    const cards = grid?.querySelectorAll<HTMLElement>('.media-card') ?? [];
+    const term = (search?.value ?? '').trim().toLowerCase();
+    let visible = 0;
+    cards.forEach((card) => {
+      const name = card.dataset.name ?? '';
+      const used = card.dataset.used === 'true';
+      const matchesFilter = activeFilter === 'all' || (activeFilter === 'used' ? used : !used);
+      const matchesSearch = !term || name.includes(term);
+      const show = matchesFilter && matchesSearch;
+      card.classList.toggle('hidden', !show);
+      if (show) visible += 1;
+    });
+    if (countLabel) {
+      countLabel.textContent = visible === 1 ? 'Mostrando 1 imagen' : `Mostrando ${visible} de ${assets.length} imágenes`;
+    }
+  }
+
+  search?.addEventListener('input', applyFilters);
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      activeFilter = chip.dataset.mediaFilter ?? 'all';
+      chips.forEach((item) => item.classList.toggle('is-active', item === chip));
+      applyFilters();
+    });
+  });
+
+  async function api<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(url, {
+      credentials: 'same-origin',
+      headers: options.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.error) {
+      const error = new Error(payload.error ?? 'No se pudo completar la operación.') as Error & { usages?: Usage[] };
+      error.usages = payload.usages;
+      throw error;
+    }
+    return payload as T;
+  }
+
+  function makeObjectUrl(file: File): string {
+    const url = URL.createObjectURL(file);
+    objectUrls.push(url);
+    return url;
+  }
+
+  /* --------------------------- Subir --------------------------- */
+  const uploadInput = document.getElementById('upload-input') as HTMLInputElement | null;
+  const uploadPreviews = document.getElementById('upload-previews');
+  const uploadAlt = document.getElementById('upload-alt') as HTMLInputElement | null;
+  const uploadBucket = document.getElementById('upload-bucket') as HTMLSelectElement | null;
+  const confirmUpload = document.querySelector<HTMLButtonElement>('[data-confirm-upload]');
+
+  function renderUploadPreviews() {
+    if (!uploadPreviews) return;
+    uploadPreviews.replaceChildren();
+    uploadFiles.forEach((file, index) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'media-preview-item';
+      const img = document.createElement('img');
+      img.src = makeObjectUrl(file);
+      img.alt = file.name;
+      const name = document.createElement('input');
+      name.className = 'admin-input';
+      name.value = file.name.replace(/\.[^.]+$/, '');
+      name.maxLength = 120;
+      name.addEventListener('input', () => (file as File & { displayName?: string }).displayName = name.value);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'admin-icon-btn';
+      remove.title = 'Quitar';
+      remove.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+      remove.addEventListener('click', () => {
+        uploadFiles.splice(index, 1);
+        renderUploadPreviews();
+      });
+      wrapper.append(img, name, remove);
+      uploadPreviews.append(wrapper);
+    });
+    if (confirmUpload) confirmUpload.disabled = uploadFiles.length === 0;
+  }
+
+  function addUploadFiles(list: FileList | File[]) {
+    const images = Array.from(list).filter((file) => file.type.startsWith('image/'));
+    uploadFiles = [...uploadFiles, ...images].slice(0, 12);
+    renderUploadPreviews();
+  }
+
+  uploadInput?.addEventListener('change', () => {
+    if (uploadInput.files) addUploadFiles(uploadInput.files);
+    uploadInput.value = '';
+  });
+
+  const dropzone = document.getElementById('upload-dropzone');
+  dropzone?.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    dropzone.classList.add('is-over');
+  });
+  dropzone?.addEventListener('dragleave', () => dropzone.classList.remove('is-over'));
+  dropzone?.addEventListener('drop', (event) => {
+    event.preventDefault();
+    dropzone.classList.remove('is-over');
+    if (event.dataTransfer?.files) addUploadFiles(event.dataTransfer.files);
+  });
+
+  confirmUpload?.addEventListener('click', async () => {
+    if (!confirmUpload || uploadFiles.length === 0) return;
+    confirmUpload.disabled = true;
+    confirmUpload.textContent = 'Guardando…';
+    try {
+      const form = new FormData();
+      uploadFiles.forEach((file, index) => {
+        form.append('files', file);
+        form.append(`name-${index}`, (file as File & { displayName?: string }).displayName ?? file.name.replace(/\.[^.]+$/, ''));
+      });
+      form.append('bucket', uploadBucket?.value ?? 'product-images');
+      if (uploadAlt?.value.trim()) form.append('alt', uploadAlt.value.trim());
+      const result = await api<{ ok: boolean; assets?: { id: string }[]; errors?: string[] }>('/api/admin/media/upload', { method: 'POST', body: form });
+      toast(`Se subieron ${result.assets?.length ?? 0} imágenes.${result.errors?.length ? ` ${result.errors.length} con errores.` : ''}`);
+      uploadFiles = [];
+      renderUploadPreviews();
+      closeModal('upload-modal');
+      window.location.reload();
+    } catch (error) {
+      toast((error as Error).message, 'warn');
+      confirmUpload.disabled = false;
+      confirmUpload.textContent = 'Guardar imágenes';
+    }
+  });
+
+  /* --------------------------- Vista previa --------------------------- */
+  const previewImage = document.getElementById('preview-image') as HTMLImageElement | null;
+  const previewMeta = document.getElementById('preview-meta');
+  const previewTitle = document.getElementById('preview-title');
+
+  function showPreview(asset: Asset) {
+    if (previewImage) {
+      previewImage.src = asset.url;
+      previewImage.alt = asset.alt || asset.name;
+    }
+    if (previewTitle) previewTitle.textContent = asset.name;
+    if (previewMeta) {
+      previewMeta.textContent = `${asset.fileName} · ${asset.mimeType} · ${(asset.sizeBytes / 1024).toFixed(1)} KB`;
+    }
+    openModal('preview-modal');
+  }
+
+  /* --------------------------- Reemplazar --------------------------- */
+  const replaceInput = document.getElementById('replace-input') as HTMLInputElement | null;
+  const replaceCurrent = document.getElementById('replace-current') as HTMLImageElement | null;
+  const replaceNext = document.getElementById('replace-next') as HTMLImageElement | null;
+  const replaceNextWrap = document.getElementById('replace-next-wrap');
+  const replaceName = document.getElementById('replace-name') as HTMLInputElement | null;
+  const replaceAlt = document.getElementById('replace-alt') as HTMLInputElement | null;
+  const confirmReplace = document.querySelector<HTMLButtonElement>('[data-confirm-replace]');
+
+  function openReplace(asset: Asset) {
+    replaceAssetId = asset.id;
+    replaceFile = null;
+    if (replaceCurrent) replaceCurrent.src = asset.url;
+    if (replaceNext) replaceNext.classList.add('hidden');
+    replaceNextWrap?.classList.add('media-compare-empty');
+    if (replaceName) replaceName.value = asset.name;
+    if (replaceAlt) replaceAlt.value = asset.alt;
+    if (confirmReplace) confirmReplace.disabled = true;
+    openModal('replace-modal');
+  }
+
+  function setReplaceFile(file: File) {
+    replaceFile = file;
+    if (replaceNext) {
+      replaceNext.src = makeObjectUrl(file);
+      replaceNext.classList.remove('hidden');
+    }
+    replaceNextWrap?.classList.remove('media-compare-empty');
+    if (confirmReplace) confirmReplace.disabled = false;
+  }
+
+  replaceInput?.addEventListener('change', () => {
+    if (replaceInput.files?.[0]) setReplaceFile(replaceInput.files[0]);
+    replaceInput.value = '';
+  });
+
+  document.getElementById('replace-dropzone')?.addEventListener('dragover', (event) => event.preventDefault());
+  document.getElementById('replace-dropzone')?.addEventListener('drop', (event) => {
+    event.preventDefault();
+    if (event.dataTransfer?.files?.[0]) setReplaceFile(event.dataTransfer.files[0]);
+  });
+
+  confirmReplace?.addEventListener('click', async () => {
+    if (!replaceAssetId || !replaceFile || !confirmReplace) return;
+    confirmReplace.disabled = true;
+    confirmReplace.textContent = 'Reemplazando…';
+    try {
+      const form = new FormData();
+      form.append('assetId', replaceAssetId);
+      form.append('file', replaceFile);
+      form.append('name', replaceName?.value ?? '');
+      form.append('alt', replaceAlt?.value ?? '');
+      await api('/api/admin/media/replace', { method: 'POST', body: form });
+      toast('Imagen reemplazada. Las referencias se conservaron.');
+      closeModal('replace-modal');
+      window.location.reload();
+    } catch (error) {
+      toast((error as Error).message, 'warn');
+      confirmReplace.disabled = false;
+      confirmReplace.textContent = 'Reemplazar';
+    }
+  });
+
+  /* --------------------------- Renombrar --------------------------- */
+  const editName = document.getElementById('edit-name') as HTMLInputElement | null;
+  const editAlt = document.getElementById('edit-alt') as HTMLInputElement | null;
+
+  function openEdit(asset: Asset) {
+    editAssetId = asset.id;
+    if (editName) editName.value = asset.name;
+    if (editAlt) editAlt.value = asset.alt;
+    openModal('edit-modal');
+  }
+
+  document.querySelector('[data-confirm-edit]')?.addEventListener('click', async () => {
+    if (!editAssetId) return;
+    try {
+      await api('/api/admin/media/update', {
+        method: 'POST',
+        body: JSON.stringify({ assetId: editAssetId, name: editName?.value ?? '', alt: editAlt?.value ?? '' }),
+      });
+      toast('Ficha actualizada.');
+      closeModal('edit-modal');
+      window.location.reload();
+    } catch (error) {
+      toast((error as Error).message, 'warn');
+    }
+  });
+
+  /* --------------------------- Reutilizar --------------------------- */
+  const attachType = document.getElementById('attach-type') as HTMLSelectElement | null;
+  const attachTarget = document.getElementById('attach-target') as HTMLSelectElement | null;
+  const attachThumb = document.getElementById('attach-thumb') as HTMLImageElement | null;
+
+  function renderTargetOptions() {
+    if (!attachTarget || !attachType) return;
+    const isProduct = attachType.value === 'product';
+    const options = isProduct
+      ? targets.products.map((product) => ({ value: product.id, label: `${product.name} · ${product.collection}` }))
+      : targets.collections.map((collection) => ({ value: collection.id, label: collection.name }));
+    attachTarget.replaceChildren();
+    if (options.length === 0) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'No hay destinos disponibles';
+      attachTarget.append(option);
+      return;
+    }
+    options.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.value;
+      option.textContent = item.label;
+      attachTarget.append(option);
+    });
+  }
+
+  function openAttach(asset: Asset) {
+    attachAssetId = asset.id;
+    if (attachThumb) attachThumb.src = asset.url;
+    renderTargetOptions();
+    openModal('attach-modal');
+  }
+
+  attachType?.addEventListener('change', renderTargetOptions);
+
+  document.querySelector('[data-confirm-attach]')?.addEventListener('click', async () => {
+    if (!attachAssetId || !attachTarget?.value) return;
+    try {
+      const result = await api<{ alreadyLinked?: boolean }>('/api/admin/media/attach', {
+        method: 'POST',
+        body: JSON.stringify({ assetId: attachAssetId, targetType: attachType?.value, targetId: attachTarget.value }),
+      });
+      toast(result.alreadyLinked ? 'La imagen ya estaba asociada ahí.' : 'Imagen asociada correctamente.');
+      closeModal('attach-modal');
+      window.location.reload();
+    } catch (error) {
+      toast((error as Error).message, 'warn');
+    }
+  });
+
+  /* --------------------------- Usos --------------------------- */
+  const usageList = document.getElementById('usage-list');
+
+  function renderUsages(asset: Asset) {
+    if (!usageList) return;
+    usageList.replaceChildren();
+    if (asset.usages.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'text-[0.75rem] text-ink/55';
+      empty.textContent = 'Esta imagen todavía no se usa en ningún producto ni colección.';
+      usageList.append(empty);
+      return;
+    }
+    asset.usages.forEach((usage) => {
+      const row = document.createElement('div');
+      row.className = 'media-usage-row';
+      const label = document.createElement('div');
+      label.className = 'min-w-0 flex-1';
+      const title = document.createElement('p');
+      title.className = 'truncate text-sm font-medium text-jade-900';
+      title.textContent = usage.name;
+      const kind = document.createElement('p');
+      kind.className = 'text-[0.65rem] uppercase tracking-[0.1em] text-ink/45';
+      kind.textContent =
+        usage.type === 'product'
+          ? 'Producto'
+          : usage.type === 'collection'
+            ? 'Galería de colección'
+            : usage.type === 'collection-hero'
+              ? 'Portada de colección'
+              : 'Reseña';
+      label.append(title, kind);
+      const link = document.createElement('a');
+      link.href = usage.href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.className = 'admin-icon-btn';
+      link.title = 'Abrir';
+      link.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+      row.append(label, link);
+      if (usage.type !== 'review') {
+        const detach = document.createElement('button');
+        detach.type = 'button';
+        detach.className = 'admin-btn admin-btn-outline admin-btn-sm';
+        detach.textContent = 'Quitar';
+        detach.addEventListener('click', async () => {
+          try {
+            await api('/api/admin/media/detach', {
+              method: 'POST',
+              body: JSON.stringify({ assetId: asset.id, targetType: usage.type, targetId: usage.id }),
+            });
+            toast('Referencia eliminada.');
+            closeModal('usage-modal');
+            window.location.reload();
+          } catch (error) {
+            toast((error as Error).message, 'warn');
+          }
+        });
+        row.append(detach);
+      }
+      usageList.append(row);
+    });
+  }
+
+  function openUsage(asset: Asset) {
+    renderUsages(asset);
+    openModal('usage-modal');
+  }
+
+  /* --------------------------- Eliminar --------------------------- */
+  async function removeAsset(asset: Asset) {
+    if (asset.usages.length > 0) {
+      toast('Quita primero las referencias antes de eliminar.', 'warn');
+      return;
+    }
+    if (!window.confirm(`¿Eliminar “${asset.name}” del almacenamiento? Esta acción no se puede deshacer.`)) return;
+    try {
+      await api('/api/admin/media/delete', {
+        method: 'POST',
+        body: JSON.stringify({ assetId: asset.id }),
+      });
+      toast('Imagen eliminada.');
+      window.location.reload();
+    } catch (error) {
+      toast((error as Error).message, 'warn');
+    }
+  }
+
+  /* --------------------------- Eventos --------------------------- */
+  document.querySelector('[data-open-upload]')?.addEventListener('click', () => {
+    uploadFiles = [];
+    renderUploadPreviews();
+    openModal('upload-modal');
+  });
+
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const find = (attr: string): string | undefined => target.closest<HTMLElement>(`[data-${attr}]`)?.dataset[attr];
+
+    const previewId = find('preview');
+    if (previewId) {
+      const asset = byId.get(previewId);
+      if (asset) showPreview(asset);
+      return;
+    }
+    const usageId = find('usage');
+    if (usageId) {
+      const asset = byId.get(usageId);
+      if (asset) openUsage(asset);
+      return;
+    }
+    const replaceId = find('replace');
+    if (replaceId) {
+      const asset = byId.get(replaceId);
+      if (asset) openReplace(asset);
+      return;
+    }
+    const attachId = find('attach');
+    if (attachId) {
+      const asset = byId.get(attachId);
+      if (asset) openAttach(asset);
+      return;
+    }
+    const editId = find('edit');
+    if (editId) {
+      const asset = byId.get(editId);
+      if (asset) openEdit(asset);
+      return;
+    }
+    const deleteId = find('delete');
+    if (deleteId) {
+      const asset = byId.get(deleteId);
+      if (asset) void removeAsset(asset);
+    }
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.closeModal;
+      if (id) closeModal(id);
+    });
+  });
+
+  window.addEventListener('beforeunload', () => {
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
+  });
+</script>

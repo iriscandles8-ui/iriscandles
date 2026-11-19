@@ -2,23 +2,17 @@
 import Base from '../../layouts/Base.astro';
 import CandleVisual from '../../components/CandleVisual.astro';
 import ProductCard from '../../components/ProductCard.astro';
-import { collections } from '../../data/collections';
-import type { Collection } from '../../data/collections';
+import { getStoreCollectionBySlug, getStoreCollections } from '../../lib/collection-data';
 import { formatCOP, pricesAreProvisional, resolveSizes, shipping } from '../../data/pricing';
 
-interface Props {
-  collection: Collection;
-}
+export const prerender = false;
 
-export function getStaticPaths() {
-  return collections.map((collection) => ({
-    params: { slug: collection.slug },
-    props: { collection },
-  }));
+const slug = Astro.params.slug ?? '';
+const collection = await getStoreCollectionBySlug(slug);
+if (!collection) {
+  return Astro.redirect('/404');
 }
-
-const { collection } = Astro.props as Props;
-const related = collections.filter((item) => item.slug !== collection.slug).slice(0, 3);
+const related = (await getStoreCollections()).filter((item) => item.slug !== collection.slug).slice(0, 3);
 const sizes = resolveSizes(collection);
 const defaultPrice = sizes[0]?.priceCop ?? null;
 
@@ -61,6 +55,8 @@ const accordions = [
               soft={collection.theme.soft}
               label={collection.name}
               sublabel={collection.aroma}
+              image={collection.heroImageUrl}
+              imageAlt={`Vela ${collection.name} · Iris Candles`}
             />
             <div class="mt-4 grid grid-cols-3 gap-3">
               {

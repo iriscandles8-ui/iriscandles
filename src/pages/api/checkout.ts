@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
 import { DEPARTMENTS } from '../../data/departments';
 import { isPaymentMethodLabel } from '../../data/payment';
+import { lookupCoupon, registerCouponUse } from '../../lib/coupon-lookup';
 import { priceOrderItems } from '../../lib/order-pricing';
+import { orderConfirmationEmail, sendEmail } from '../../lib/resend';
 import { createSupabaseAdmin } from '../../lib/supabase-admin';
 
 export const prerender = false;
@@ -135,7 +137,22 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ error: 'Selecciona un departamento válido.' }, 400);
   }
 
-  const pricing = priceOrderItems(body.items);
+  const basePricing = await priceOrderItems(body.items, admin);
+  if (!basePricing.ok) return json({ error: basePricing.error }, 400);
+
+  // El cupón se valida otra vez en servidor, con la service role: el carrito
+  // nunca es fuente de verdad para el descuento.
+  const couponCode = text(body.couponCode, 40);
+  const couponResult = couponCode
+    ? await lookupCoupon(couponCode, basePricing.order.subtotalCop, admin)
+    : null;
+  if (couponResult && !couponResult.ok) {
+    return json({ error: `Cupón: ${couponResult.error}` }, 400);
+  }
+
+  const pricing = couponResult?.ok
+    ? await priceOrderItems(body.items, admin, couponResult.discountCop)
+    : basePricing;
   if (!pricing.ok) return json({ error: pricing.error }, 400);
 
   const skus = pricing.order.items.map((item) => item.sku);
@@ -162,6 +179,8 @@ export const POST: APIRoute = async ({ request }) => {
       status: 'pending',
       payment_status: 'pending',
       subtotal_cop: pricing.order.subtotalCop,
+      discount_cop: pricing.order.discountCop,
+      coupon_code: couponResult?.ok ? couponResult.coupon.code : null,
       shipping_cop: pricing.order.shippingCop,
       total_cop: pricing.order.totalCop,
       wompi_reference: reference,
@@ -219,6 +238,42 @@ export const POST: APIRoute = async ({ request }) => {
       500,
     );
   }
+
+  // Uso del cupón: best-effort con concurrencia optimista. Si otro pedido agotó
+  // los usos mientras se confirmaba, no se cuenta este registro.
+  if (couponResult?.ok) {
+    await registerCouponUse(admin, couponResult.record);
+  }
+
+  // Correo de confirmación: nunca bloquea ni falla el pedido si Resend falla.
+  const emailData = {
+    orderNumber: text(order.order_number, 40),
+    customerName: name,
+    customerEmail: email,
+    items: pricing.order.items.map((item) => ({
+      productName: item.productName,
+      sizeLabel: item.sizeLabel,
+      quantity: item.quantity,
+      subtotalCop: item.subtotalCop,
+    })),
+    subtotalCop: pricing.order.subtotalCop,
+    discountCop: pricing.order.discountCop,
+    couponCode: couponResult?.ok ? couponResult.coupon.code : undefined,
+    shippingCop: pricing.order.shippingCop,
+    totalCop: pricing.order.totalCop,
+    paymentMethod,
+    city,
+    department,
+    reference,
+  };
+  const confirmation = orderConfirmationEmail(emailData);
+  await sendEmail({
+    to: email,
+    subject: confirmation.subject,
+    html: confirmation.html,
+    text: confirmation.text,
+    replyTo: 'hola@iriscandles.com',
+  });
 
   return json(
     {

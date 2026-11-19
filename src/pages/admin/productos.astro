@@ -6,12 +6,14 @@ import AdminIcon from '../../components/admin/AdminIcon.astro';
 import { formatCOP, formatCompactCOP } from '../../lib/admin';
 import { demoProducts } from '../../data/admin-demo';
 import { getProducts } from '../../lib/admin-data';
+import { getManagedCollections } from '../../lib/collection-data';
 import { createSupabaseServer } from '../../lib/supabase-server';
 
 export const prerender = false;
 
 const supabase = createSupabaseServer(Astro);
 const products = supabase ? await getProducts(supabase) : demoProducts;
+const managedCollections = supabase ? await getManagedCollections(supabase) : [];
 
 const variants = products.flatMap((product) => product.variants);
 const inventoryValue = variants.reduce((sum, variant) => sum + variant.price * variant.stock, 0);
@@ -45,14 +47,38 @@ const swatch = (product: (typeof products)[number]) => accents[product.slug] ?? 
     </button>
   </PageHeader>
 
-  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  <div class="mb-5 flex gap-1 border-b border-cream-300" role="tablist" aria-label="Catálogo">
+    <button
+      type="button"
+      role="tab"
+      aria-selected="true"
+      aria-controls="panel-productos"
+      class="admin-tab is-active"
+      data-catalog-tab="productos"
+    >
+      Productos
+    </button>
+    <button
+      type="button"
+      role="tab"
+      aria-selected="false"
+      aria-controls="panel-colecciones"
+      class="admin-tab"
+      data-catalog-tab="colecciones"
+    >
+      Colecciones
+      <span class="admin-nav-badge">{managedCollections.length}</span>
+    </button>
+  </div>
+
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-tab-panel="productos" id="panel-productos">
     <StatCard label="Productos activos" value={String(products.filter((p) => p.status === 'active').length)} icon="tag" hint="4 colecciones" />
     <StatCard label="Variantes" value={String(variants.length)} icon="box" hint="120 g y 220 g" />
     <StatCard label="Valor del inventario" value={formatCompactCOP(inventoryValue)} icon="coins" hint="a precio de venta" />
     <StatCard label="Stock bajo" value={String(lowStock)} icon="alert" hint="5 unidades o menos" />
   </section>
 
-  <section class="admin-card mt-5">
+  <section class="admin-card mt-5" data-tab-panel="productos">
     <div class="admin-card-head gap-3">
       <div class="relative w-full sm:max-w-xs">
         <AdminIcon name="search" size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/35" />
@@ -199,7 +225,7 @@ const swatch = (product: (typeof products)[number]) => accents[product.slug] ?? 
     </div>
   </section>
 
-  <section class="mt-5 grid gap-5 lg:grid-cols-2">
+  <section class="mt-5 grid gap-5 lg:grid-cols-2" data-tab-panel="productos">
     <div class="admin-card p-5">
       <div class="flex items-start gap-3">
         <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xs bg-jade-50 text-jade-800">
@@ -332,8 +358,212 @@ const swatch = (product: (typeof products)[number]) => accents[product.slug] ?? 
       </div>
     </form>
   </div>
+
+  <!-- Panel de colecciones -->
+  <div data-tab-panel="colecciones" hidden>
+    <section class="admin-card">
+      <div class="admin-card-head gap-3">
+        <div>
+          <h2 class="admin-card-title">Colecciones</h2>
+          <p class="mt-1 max-w-2xl text-[0.72rem] leading-relaxed text-ink/55">
+            Contenido, fotografías propias, productos y fechas de publicación. Las fotos de una
+            colección son independientes de las fotografías individuales de cada producto.
+          </p>
+        </div>
+        <button type="button" class="admin-btn admin-btn-primary" data-new-collection>
+          <AdminIcon name="plus" size={15} />
+          Nueva colección
+        </button>
+      </div>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Colección</th>
+              <th>Estado</th>
+              <th>Productos</th>
+              <th>Fotos</th>
+              <th>Publicación</th>
+              <th class="text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="collections-body"></tbody>
+        </table>
+      </div>
+
+      <div class="border-t border-cream-300 px-4 py-3 text-[0.68rem] text-ink/45" data-collections-count>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal colección -->
+  <div
+    id="collection-modal"
+    class="admin-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="collection-modal-title"
+  >
+    <form id="collection-form" class="admin-modal-panel is-wide">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Catálogo</p>
+          <h2 id="collection-modal-title" class="admin-card-title mt-1">Nueva colección</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="collection-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+
+      <div class="admin-modal-body">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="admin-label" for="collection-name">Nombre</label>
+            <input id="collection-name" data-cfield="name" required class="admin-input" placeholder="Otoño Dorado" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-slug">Slug (URL)</label>
+            <input id="collection-slug" data-cfield="slug" class="admin-input" placeholder="otono-dorado" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-aroma">Aroma</label>
+            <input id="collection-aroma" data-cfield="aroma" class="admin-input" placeholder="Manzana & Canela" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-family">Familia olfativa</label>
+            <input id="collection-family" data-cfield="family" class="admin-input" placeholder="Especiado · Gourmand" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-tagline">Frase corta</label>
+            <input id="collection-tagline" data-cfield="tagline" class="admin-input" placeholder="El calor de una tarde que se alarga." />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-number">Número</label>
+            <input id="collection-number" data-cfield="number" class="admin-input" placeholder="05" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-intensity">Intensidad (1–5)</label>
+            <input id="collection-intensity" data-cfield="intensity" type="number" min="1" max="5" class="admin-input" value="3" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-burn">Horas de quemado</label>
+            <input id="collection-burn" data-cfield="burnHours" class="admin-input" placeholder="45–55 h" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="admin-label" for="collection-description">Descripción</label>
+            <textarea id="collection-description" data-cfield="description" rows="3" class="admin-textarea"></textarea>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="admin-label" for="collection-story">Historia</label>
+            <textarea id="collection-story" data-cfield="story" rows="3" class="admin-textarea"></textarea>
+          </div>
+          <div>
+            <label class="admin-label" for="collection-notes-top">Notas de salida (separadas por coma)</label>
+            <input id="collection-notes-top" data-cnote="top" class="admin-input" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-notes-heart">Notas de corazón</label>
+            <input id="collection-notes-heart" data-cnote="heart" class="admin-input" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="admin-label" for="collection-notes-base">Notas de fondo</label>
+            <input id="collection-notes-base" data-cnote="base" class="admin-input" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-accent">Color acento</label>
+            <input id="collection-accent" data-ctheme="accent" type="color" class="admin-input h-10" value="#B85E37" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-soft">Color claro</label>
+            <input id="collection-soft" data-ctheme="soft" type="color" class="admin-input h-10" value="#F3E9D6" />
+          </div>
+          <div>
+            <label class="admin-label" for="collection-deep">Color oscuro</label>
+            <input id="collection-deep" data-ctheme="deep" type="color" class="admin-input h-10" value="#8F4526" />
+          </div>
+        </div>
+
+        <div class="mt-6 border-t border-cream-300 pt-5">
+          <p class="admin-label mb-0">Publicación</p>
+          <div class="mt-3 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="admin-label" for="collection-status">Estado</label>
+              <select id="collection-status" data-cfield="status" class="admin-select">
+                <option value="draft">Borrador</option>
+                <option value="scheduled">Programada</option>
+                <option value="published">Publicada</option>
+                <option value="archived">Archivada</option>
+              </select>
+            </div>
+            <div>
+              <label class="admin-label" for="collection-publish">Fecha de publicación</label>
+              <input id="collection-publish" data-cfield="publishAt" type="datetime-local" class="admin-input" />
+            </div>
+            <div>
+              <label class="admin-label" for="collection-unpublish">Fecha de retiro</label>
+              <input id="collection-unpublish" data-cfield="unpublishAt" type="datetime-local" class="admin-input" />
+            </div>
+            <div>
+              <label class="admin-label" for="collection-sort">Orden de aparición</label>
+              <input id="collection-sort" data-cfield="sortOrder" type="number" class="admin-input" value="0" />
+            </div>
+          </div>
+          <label class="mt-3 flex items-center gap-2 text-[0.72rem] text-ink/65">
+            <input id="collection-seasonal" data-cfield="isSeasonal" type="checkbox" class="h-3.5 w-3.5 accent-jade-900" />
+            Colección temporal o de temporada
+          </label>
+          <div class="mt-2">
+            <label class="admin-label" for="collection-season-label">Etiqueta de temporada</label>
+            <input id="collection-season-label" data-cfield="seasonLabel" class="admin-input" placeholder="Navidad 2026" />
+          </div>
+        </div>
+
+        <div class="mt-6 border-t border-cream-300 pt-5">
+          <p class="admin-label mb-0">Fotografías de la colección</p>
+          <p class="mt-1 text-[0.66rem] leading-relaxed text-ink/50">
+            Este bucket es exclusivo de colecciones. Reemplazar o quitar una foto aquí nunca modifica las fotos de los productos.
+          </p>
+
+          <div class="mt-3 flex flex-wrap items-end gap-3">
+            <div class="min-w-[220px] flex-1">
+              <label class="admin-label" for="collection-hero">Fotografía principal</label>
+              <input id="collection-hero" type="file" accept="image/*" class="admin-input py-1.5" />
+            </div>
+            <div>
+              <label class="admin-label" for="collection-gallery">Fotografías adicionales</label>
+              <input id="collection-gallery" type="file" accept="image/*" multiple class="admin-input py-1.5" />
+            </div>
+          </div>
+
+          <img data-hero-preview alt="" class="mt-3 hidden h-32 w-28 border border-cream-300 object-cover" />
+          <div data-collection-gallery class="mt-3 grid gap-3 sm:grid-cols-3"></div>
+        </div>
+
+        <div class="mt-6 border-t border-cream-300 pt-5">
+          <p class="admin-label mb-0">Productos de la colección</p>
+          <p class="mt-1 text-[0.66rem] text-ink/50">
+            Un producto puede pertenecer a varias colecciones. Usa las flechas para ordenar.
+          </p>
+          <input type="search" data-collection-product-search class="admin-input mt-3" placeholder="Buscar producto…" aria-label="Buscar producto" />
+          <div data-collection-products class="mt-2 max-h-64 space-y-1 overflow-y-auto border border-cream-300 p-2"></div>
+        </div>
+      </div>
+
+      <div class="admin-modal-foot flex-wrap gap-2">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="collection-modal">Cancelar</button>
+        <button type="button" class="admin-btn admin-btn-outline" data-save-collection="draft">Guardar borrador</button>
+        <button type="button" class="admin-btn admin-btn-primary" data-save-collection="save">Guardar colección</button>
+        <button type="button" class="admin-btn admin-btn-outline hidden" data-toggle-collection-publish>Publicar</button>
+        <button type="button" class="admin-btn admin-btn-outline hover:bg-rose-50 hover:text-rose-700" data-delete-collection>
+          Eliminar
+        </button>
+      </div>
+    </form>
+  </div>
 </AdminLayout>
 
+<script type="application/json" id="collections-data" set:html={JSON.stringify(managedCollections)}></script>
 <script type="application/json" id="products-data" set:html={JSON.stringify(products)}></script>
 
 <script>
@@ -638,5 +868,616 @@ const swatch = (product: (typeof products)[number]) => accents[product.slug] ?? 
 
     (window as any).closeAdminModal('product-modal');
     applyFilters();
+  });
+
+  /* ------------------------------ Colecciones ------------------------------ */
+
+  import { supabase } from '../../lib/supabase';
+
+  type CollectionImageDraft = {
+    id: string;
+    url: string;
+    alt: string;
+    sortOrder: number;
+    file?: File;
+    preview?: string;
+    isNew: boolean;
+    hero: boolean;
+  };
+
+  type ManagedCollection = {
+    id: string;
+    slug: string;
+    name: string;
+    tagline: string;
+    description: string;
+    story: string;
+    aroma: string;
+    family: string;
+    intensity: number;
+    burnHours: string;
+    notes: { top: string[]; heart: string[]; base: string[] };
+    theme: { accent: string; soft: string; deep: string };
+    number: string;
+    sortOrder: number;
+    status: 'draft' | 'scheduled' | 'published' | 'archived';
+    publishAt: string | null;
+    unpublishAt: string | null;
+    isSeasonal: boolean;
+    seasonLabel: string;
+    heroImageUrl: string;
+    images: { id: string; url: string; alt: string; sortOrder: number }[];
+    products: { productId: string; name: string; slug: string; sku: string; sortOrder: number }[];
+  };
+
+  type AdminProduct = { id: string; name: string; aroma: string; variants: { sku: string }[] };
+
+  const collectionsNode = document.getElementById('collections-data');
+  let collections: ManagedCollection[] = collectionsNode
+    ? JSON.parse(collectionsNode.textContent ?? '[]')
+    : [];
+  const catalogNode = document.getElementById('products-data');
+  const catalogProducts: AdminProduct[] = catalogNode
+    ? JSON.parse(catalogNode.textContent ?? '[]')
+    : [];
+
+  const cform = document.getElementById('collection-form') as HTMLFormElement | null;
+  const collectionsBody = document.getElementById('collections-body');
+  const galleryHost = document.querySelector<HTMLElement>('[data-collection-gallery]');
+  const productsHost = document.querySelector<HTMLElement>('[data-collection-products]');
+  const heroPreview = document.querySelector<HTMLImageElement>('[data-hero-preview]');
+  const publishButton = document.querySelector<HTMLButtonElement>('[data-toggle-collection-publish]');
+  const deleteButton = document.querySelector<HTMLButtonElement>('[data-delete-collection]');
+  const collectionTitle = document.getElementById('collection-modal-title');
+
+  let editingCollectionId: string | null = null;
+  let currentCollection: ManagedCollection | null = null;
+  let draftImages: CollectionImageDraft[] = [];
+  let deletedImageIds: string[] = [];
+  let draftProductIds: string[] = [];
+  let productFilter = '';
+
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  const statusLabel: Record<string, string> = {
+    draft: 'Borrador',
+    scheduled: 'Programada',
+    published: 'Publicada',
+    archived: 'Archivada',
+  };
+  const statusTone: Record<string, string> = {
+    draft: 'slate',
+    scheduled: 'amber',
+    published: 'jade',
+    archived: 'slate',
+  };
+
+  const cfield = (name: string): HTMLInputElement | null =>
+    cform?.querySelector(`[data-cfield="${name}"]`) as HTMLInputElement | null;
+
+  function setCfield(name: string, value: string) {
+    const el = cfield(name);
+    if (el) el.value = value;
+  }
+
+  async function api(path: string, options: RequestInit = {}): Promise<any> {
+    const response = await fetch(path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'No se pudo completar la acción.');
+    return data;
+  }
+
+  function toIso(value: string): string | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function renderCollections() {
+    if (!collectionsBody) return;
+    collectionsBody.innerHTML = collections
+      .map((collection) => {
+        const date = collection.publishAt
+          ? new Date(collection.publishAt).toLocaleDateString('es-CO')
+          : 'Inmediata';
+        return `
+        <tr data-collection-row="${collection.id}">
+          <td>
+            <p class="font-medium text-jade-900">${escapeHtml(collection.name)}</p>
+            <p class="text-[0.66rem] text-ink/45">/${escapeHtml(collection.slug)}${collection.isSeasonal ? ` · ${escapeHtml(collection.seasonLabel || 'temporada')}` : ''}</p>
+          </td>
+          <td><span class="admin-badge" data-tone="${statusTone[collection.status] ?? 'slate'}">${statusLabel[collection.status] ?? collection.status}</span></td>
+          <td class="num text-ink/60">${collection.products.length}</td>
+          <td class="num text-ink/60">${collection.images.length}${collection.heroImageUrl ? ' + principal' : ''}</td>
+          <td class="text-[0.7rem] text-ink/55">${date}</td>
+          <td>
+            <div class="flex items-center justify-end gap-1">
+              <button type="button" class="admin-icon-btn" data-edit-collection="${collection.id}" title="Editar" aria-label="Editar ${escapeHtml(collection.name)}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+              </button>
+              <button type="button" class="admin-icon-btn" data-publish-collection="${collection.id}" title="${collection.status === 'published' ? 'Despublicar' : 'Publicar'}" aria-label="${collection.status === 'published' ? 'Despublicar' : 'Publicar'} ${escapeHtml(collection.name)}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+              <button type="button" class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700" data-remove-collection="${collection.id}" title="Eliminar" aria-label="Eliminar ${escapeHtml(collection.name)}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>`;
+      })
+      .join('');
+
+    const count = document.querySelector<HTMLElement>('[data-collections-count]');
+    if (count) {
+      count.textContent = `${collections.length} colección${collections.length === 1 ? '' : 'es'} · los cambios de publicación afectan a la tienda al guardar.`;
+    }
+  }
+
+  function renderGallery() {
+    if (!galleryHost) return;
+    const ordered = [...draftImages].sort((a, b) => a.sortOrder - b.sortOrder);
+    galleryHost.innerHTML = ordered
+      .map(
+        (image, index) => `
+      <div class="admin-gallery-item" data-gallery-item="${image.id}">
+        <img src="${escapeHtml(image.preview || image.url)}" alt="${escapeHtml(image.alt)}" />
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[0.62rem] uppercase tracking-[0.1em] ${image.hero ? 'text-terracotta-700' : 'text-ink/45'}">
+            ${image.hero ? 'Principal' : `Foto ${index + 1}`}
+          </span>
+          <div class="flex gap-1">
+            <button type="button" class="admin-icon-btn" data-img-up="${image.id}" aria-label="Subir foto" title="Subir">↑</button>
+            <button type="button" class="admin-icon-btn" data-img-down="${image.id}" aria-label="Bajar foto" title="Bajar">↓</button>
+            <button type="button" class="admin-icon-btn" data-img-hero="${image.id}" aria-label="Usar como principal" title="Usar como principal">★</button>
+            <button type="button" class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700" data-img-remove="${image.id}" aria-label="Quitar foto" title="Quitar">×</button>
+          </div>
+        </div>
+        <input type="text" class="admin-input py-1" data-img-alt="${image.id}" value="${escapeHtml(image.alt)}" placeholder="Texto alternativo" aria-label="Texto alternativo" />
+        <label class="text-[0.62rem] text-ink/50">Reemplazar
+          <input type="file" accept="image/*" class="admin-input py-1" data-img-replace="${image.id}" />
+        </label>
+      </div>`,
+      )
+      .join('');
+
+    const hero = draftImages.find((image) => image.hero);
+    if (heroPreview) {
+      heroPreview.src = hero?.preview || hero?.url || '';
+      heroPreview.classList.toggle('hidden', !hero);
+      heroPreview.alt = hero?.alt ?? '';
+    }
+  }
+
+  function renderProductPicker() {
+    if (!productsHost) return;
+    const term = productFilter.trim().toLowerCase();
+    const selected = draftProductIds
+      .map((id) => catalogProducts.find((product) => product.id === id))
+      .filter((product): product is AdminProduct => Boolean(product));
+    const available = catalogProducts.filter(
+      (product) => !draftProductIds.includes(product.id) && (!term || `${product.name} ${product.aroma}`.toLowerCase().includes(term)),
+    );
+
+    const row = (product: AdminProduct, isSelected: boolean) => {
+      const index = draftProductIds.indexOf(product.id);
+      const sku = product.variants[0]?.sku ?? '';
+      return `
+        <div class="flex items-center gap-2 border-b border-cream-200 py-2 last:border-0" data-pick-row="${product.id}">
+          <input type="checkbox" class="h-3.5 w-3.5 accent-jade-900" data-product-check="${product.id}" ${isSelected ? 'checked' : ''} aria-label="Incluir ${escapeHtml(product.name)}" />
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-[0.76rem] font-medium text-jade-900">${escapeHtml(product.name)}</p>
+            <p class="text-[0.62rem] text-ink/45">${escapeHtml(product.aroma)} · ${escapeHtml(sku)}</p>
+          </div>
+          ${
+            isSelected
+              ? `<span class="admin-badge" data-tone="jade">${index + 1}</span>
+                 <button type="button" class="admin-icon-btn" data-product-up="${product.id}" aria-label="Subir producto" title="Subir">↑</button>
+                 <button type="button" class="admin-icon-btn" data-product-down="${product.id}" aria-label="Bajar producto" title="Bajar">↓</button>`
+              : ''
+          }
+        </div>`;
+    };
+
+    productsHost.innerHTML = [
+      ...selected.map((product) => row(product, true)),
+      selected.length && available.length
+        ? '<p class="px-2 pt-3 text-[0.6rem] uppercase tracking-[0.14em] text-ink/35">Disponibles</p>'
+        : '',
+      ...available.map((product) => row(product, false)),
+    ].join('');
+  }
+
+  function openCollectionModal(collection?: ManagedCollection) {
+    if (!cform) return;
+    currentCollection = collection ?? null;
+    editingCollectionId = collection?.id ?? null;
+    deletedImageIds = [];
+    draftProductIds = collection ? collection.products.map((item) => item.productId) : [];
+
+    if (collectionTitle) {
+      collectionTitle.textContent = collection ? `Editar ${collection.name}` : 'Nueva colección';
+    }
+
+    setCfield('name', collection?.name ?? '');
+    setCfield('slug', collection?.slug ?? '');
+    setCfield('aroma', collection?.aroma ?? '');
+    setCfield('family', collection?.family ?? '');
+    setCfield('tagline', collection?.tagline ?? '');
+    setCfield('number', collection?.number ?? '');
+    setCfield('intensity', String(collection?.intensity ?? 3));
+    setCfield('burnHours', collection?.burnHours ?? '');
+    setCfield('description', collection?.description ?? '');
+    setCfield('story', collection?.story ?? '');
+    setCfield('status', collection?.status ?? 'draft');
+    setCfield('publishAt', collection?.publishAt ? collection.publishAt.slice(0, 16) : '');
+    setCfield('unpublishAt', collection?.unpublishAt ? collection.unpublishAt.slice(0, 16) : '');
+    setCfield('sortOrder', String(collection?.sortOrder ?? 0));
+    setCfield('seasonLabel', collection?.seasonLabel ?? '');
+
+    const seasonal = cfield('isSeasonal');
+    if (seasonal) seasonal.checked = collection?.isSeasonal ?? false;
+
+    const note = (key: 'top' | 'heart' | 'base') =>
+      cform.querySelector(`[data-cnote="${key}"]`);
+    (['top', 'heart', 'base'] as const).forEach((key) => {
+      const input = note(key) as HTMLInputElement | null;
+      if (input) input.value = (collection?.notes[key] ?? []).join(', ');
+    });
+    (['accent', 'soft', 'deep'] as const).forEach((key) => {
+      const input = cform.querySelector(`[data-ctheme="${key}"]`) as HTMLInputElement | null;
+      if (input) input.value = collection?.theme[key] ?? '#B85E37';
+    });
+
+    draftImages = (collection?.images ?? []).map((image) => ({
+      ...image,
+      isNew: false,
+      hero: image.url === collection?.heroImageUrl,
+    }));
+    if (collection?.heroImageUrl && !draftImages.some((image) => image.hero)) {
+      draftImages.unshift({
+        id: `hero-${collection.id}`,
+        url: collection.heroImageUrl,
+        alt: '',
+        sortOrder: -1,
+        isNew: false,
+        hero: true,
+      });
+    }
+
+    if (publishButton) {
+      publishButton.classList.toggle('hidden', !collection);
+      publishButton.textContent = collection?.status === 'published' ? 'Despublicar' : 'Publicar';
+    }
+    if (deleteButton) deleteButton.classList.toggle('hidden', !collection);
+
+    renderGallery();
+    renderProductPicker();
+    (window as any).openAdminModal('collection-modal');
+  }
+
+  function collectionPayload(status: string) {
+    const list = (key: string): string[] =>
+      (cform?.querySelector(`[data-cnote="${key}"]`) as HTMLInputElement | null)?.value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean) ?? [];
+    const color = (key: string): string =>
+      (cform?.querySelector(`[data-ctheme="${key}"]`) as HTMLInputElement | null)?.value ?? '';
+
+    return {
+      name: cfield('name')?.value.trim() ?? '',
+      slug: cfield('slug')?.value.trim() ?? '',
+      aroma: cfield('aroma')?.value.trim() ?? '',
+      family: cfield('family')?.value.trim() ?? '',
+      tagline: cfield('tagline')?.value.trim() ?? '',
+      number: cfield('number')?.value.trim() ?? '',
+      intensity: Number(cfield('intensity')?.value ?? 3),
+      burnHours: cfield('burnHours')?.value.trim() ?? '',
+      description: cfield('description')?.value.trim() ?? '',
+      story: cfield('story')?.value.trim() ?? '',
+      notes: { top: list('top'), heart: list('heart'), base: list('base') },
+      theme: { accent: color('accent'), soft: color('soft'), deep: color('deep') },
+      status,
+      publishAt: toIso(cfield('publishAt')?.value ?? ''),
+      unpublishAt: toIso(cfield('unpublishAt')?.value ?? ''),
+      sortOrder: Number(cfield('sortOrder')?.value ?? 0),
+      isSeasonal: Boolean((cfield('isSeasonal') as HTMLInputElement | null)?.checked),
+      seasonLabel: cfield('seasonLabel')?.value.trim() ?? '',
+      heroImageUrl: (() => {
+        const hero = draftImages.find((image) => image.hero);
+        return hero && !hero.isNew ? hero.url : '';
+      })(),
+    };
+  }
+
+  async function uploadCollectionImage(file: File, collectionId: string): Promise<string> {
+    if (!supabase) throw new Error('Supabase no está configurado.');
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const path = `${collectionId}/${Date.now()}-${safe}`;
+    const { error } = await supabase.storage
+      .from('collection-images')
+      .upload(path, file, { contentType: file.type, upsert: false, cacheControl: '3600' });
+    if (error) throw error;
+    return supabase.storage.from('collection-images').getPublicUrl(path).data.publicUrl;
+  }
+
+  async function saveCollection(mode: 'save' | 'draft') {
+    if (!cform) return;
+    const payload = collectionPayload(mode === 'draft' ? 'draft' : cfield('status')?.value ?? 'draft');
+    if (payload.name.length < 2) {
+      (window as any).adminToast('Escribe el nombre de la colección.', 'warn');
+      return;
+    }
+
+    try {
+      let id = editingCollectionId;
+      if (!id) {
+        const created = await api('/api/admin/collections', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        id = created.id as string;
+        editingCollectionId = id;
+      } else {
+        await api(`/api/admin/collections/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+      }
+
+      for (const imageId of Array.from(new Set(deletedImageIds))) {
+        await api(`/api/admin/collections/${id}/images`, {
+          method: 'DELETE',
+          body: JSON.stringify({ imageId }),
+        });
+      }
+      deletedImageIds = [];
+
+      for (const image of draftImages) {
+        if (!image.isNew || !image.file) continue;
+        const url = await uploadCollectionImage(image.file, id!);
+        const registered = await api(`/api/admin/collections/${id}/images`, {
+          method: 'POST',
+          body: JSON.stringify({
+            url,
+            alt: image.alt,
+            sortOrder: image.sortOrder,
+            hero: image.hero,
+          }),
+        });
+        image.id = registered.image.id;
+        image.url = url;
+        image.file = undefined;
+        image.preview = undefined;
+        image.isNew = false;
+      }
+
+      await api(`/api/admin/collections/${id}/products`, {
+        method: 'POST',
+        body: JSON.stringify({
+          products: draftProductIds.map((productId, index) => ({ productId, sortOrder: index })),
+        }),
+      });
+
+      window.location.reload();
+    } catch (error) {
+      (window as any).adminToast(
+        error instanceof Error ? error.message : 'No se pudo guardar la colección.',
+        'warn',
+      );
+    }
+  }
+
+  async function toggleCollectionPublish() {
+    if (!editingCollectionId || !currentCollection) return;
+    const next = currentCollection.status === 'published' ? 'draft' : 'published';
+    try {
+      await api(`/api/admin/collections/${editingCollectionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: next }),
+      });
+      window.location.reload();
+    } catch (error) {
+      (window as any).adminToast(error instanceof Error ? error.message : 'No se pudo cambiar el estado.', 'warn');
+    }
+  }
+
+  async function deleteCollection() {
+    if (!editingCollectionId || !currentCollection) return;
+    const ok = window.confirm(
+      `¿Eliminar “${currentCollection.name}”? Los ${currentCollection.products.length} productos asociados NO se eliminarán: solo dejarán de pertenecer a esta colección.`,
+    );
+    if (!ok) return;
+    try {
+      await api(`/api/admin/collections/${editingCollectionId}`, { method: 'DELETE' });
+      window.location.reload();
+    } catch (error) {
+      (window as any).adminToast(error instanceof Error ? error.message : 'No se pudo eliminar.', 'warn');
+    }
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-catalog-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tab = button.dataset.catalogTab;
+      document.querySelectorAll<HTMLButtonElement>('[data-catalog-tab]').forEach((item) => {
+        const active = item === button;
+        item.classList.toggle('is-active', active);
+        item.setAttribute('aria-selected', String(active));
+      });
+      document.querySelectorAll<HTMLElement>('[data-tab-panel]').forEach((panel) => {
+        panel.hidden = panel.dataset.tabPanel !== tab;
+      });
+    });
+  });
+
+  renderCollections();
+
+  document.querySelector('[data-new-collection]')?.addEventListener('click', () => openCollectionModal());
+
+  collectionsBody?.addEventListener('click', async (event) => {
+    const target = event.target as HTMLElement;
+    const edit = target.closest<HTMLButtonElement>('[data-edit-collection]');
+    if (edit) {
+      const collection = collections.find((item) => item.id === edit.dataset.editCollection);
+      if (collection) openCollectionModal(collection);
+      return;
+    }
+    const publish = target.closest<HTMLButtonElement>('[data-publish-collection]');
+    if (publish) {
+      const collection = collections.find((item) => item.id === publish.dataset.publishCollection);
+      if (!collection) return;
+      const next = collection.status === 'published' ? 'draft' : 'published';
+      try {
+        await api(`/api/admin/collections/${collection.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: next }),
+        });
+        window.location.reload();
+      } catch (error) {
+        (window as any).adminToast(error instanceof Error ? error.message : 'No se pudo publicar.', 'warn');
+      }
+      return;
+    }
+    const remove = target.closest<HTMLButtonElement>('[data-remove-collection]');
+    if (remove) {
+      const collection = collections.find((item) => item.id === remove.dataset.removeCollection);
+      if (!collection) return;
+      if (!window.confirm(`¿Eliminar “${collection.name}”? Sus ${collection.products.length} productos se conservarán.`)) return;
+      try {
+        await api(`/api/admin/collections/${collection.id}`, { method: 'DELETE' });
+        window.location.reload();
+      } catch (error) {
+        (window as any).adminToast(error instanceof Error ? error.message : 'No se pudo eliminar.', 'warn');
+      }
+    }
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-save-collection]').forEach((button) => {
+    button.addEventListener('click', () => saveCollection(button.dataset.saveCollection === 'draft' ? 'draft' : 'save'));
+  });
+  publishButton?.addEventListener('click', toggleCollectionPublish);
+  deleteButton?.addEventListener('click', deleteCollection);
+
+  cform?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    saveCollection('save');
+  });
+
+  document.getElementById('collection-hero')?.addEventListener('change', (event) => {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    draftImages.forEach((image) => (image.hero = false));
+    const id = `hero-${Date.now()}`;
+    draftImages.push({
+      id,
+      url: '',
+      alt: '',
+      sortOrder: -1,
+      file,
+      preview: URL.createObjectURL(file),
+      isNew: true,
+      hero: true,
+    });
+    renderGallery();
+  });
+
+  document.getElementById('collection-gallery')?.addEventListener('change', (event) => {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    if (!files.length) return;
+    files.forEach((file, index) => {
+      draftImages.push({
+        id: `new-${Date.now()}-${index}`,
+        url: '',
+        alt: '',
+        sortOrder: draftImages.length,
+        file,
+        preview: URL.createObjectURL(file),
+        isNew: true,
+        hero: false,
+      });
+    });
+    renderGallery();
+  });
+
+  galleryHost?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const imageId = (button: HTMLElement) => button.dataset.imgUp ?? button.dataset.imgDown ?? button.dataset.imgHero ?? button.dataset.imgRemove ?? '';
+    const id = imageId(target);
+    if (!id) return;
+    const index = draftImages.findIndex((image) => image.id === id);
+    if (index < 0) return;
+
+    if (target.dataset.imgRemove) {
+      const image = draftImages[index];
+      if (image.preview) URL.revokeObjectURL(image.preview);
+      // Solo las filas reales de collection_images se borran en la BD.
+      if (!image.isNew && UUID_RE.test(image.id)) deletedImageIds.push(image.id);
+      draftImages.splice(index, 1);
+    } else if (target.dataset.imgHero) {
+      draftImages.forEach((image) => (image.hero = image.id === id));
+    } else if (target.dataset.imgUp && index > 0) {
+      [draftImages[index - 1].sortOrder, draftImages[index].sortOrder] = [draftImages[index].sortOrder, draftImages[index - 1].sortOrder];
+    } else if (target.dataset.imgDown && index < draftImages.length - 1) {
+      [draftImages[index + 1].sortOrder, draftImages[index].sortOrder] = [draftImages[index].sortOrder, draftImages[index + 1].sortOrder];
+    }
+    renderGallery();
+  });
+
+  galleryHost?.addEventListener('input', (event) => {
+    const target = event.target as HTMLInputElement;
+    const id = target.dataset.imgAlt;
+    if (!id) return;
+    const image = draftImages.find((item) => item.id === id);
+    if (image) image.alt = target.value;
+  });
+
+  galleryHost?.addEventListener('change', (event) => {
+    const target = event.target as HTMLInputElement;
+    const id = target.dataset.imgReplace;
+    if (!id || !target.files?.[0]) return;
+    const image = draftImages.find((item) => item.id === id);
+    if (!image) return;
+    if (image.preview) URL.revokeObjectURL(image.preview);
+    const file = target.files[0];
+    // La fila anterior se elimina al guardar; así "reemplazar" no duplica fotos.
+    if (!image.isNew) deletedImageIds = Array.from(new Set([...deletedImageIds, image.id]));
+    image.file = file;
+    image.preview = URL.createObjectURL(file);
+    image.isNew = true;
+    renderGallery();
+  });
+
+  document.querySelector('[data-collection-product-search]')?.addEventListener('input', (event) => {
+    productFilter = (event.target as HTMLInputElement).value;
+    renderProductPicker();
+  });
+
+  productsHost?.addEventListener('change', (event) => {
+    const target = event.target as HTMLInputElement;
+    const id = target.dataset.productCheck;
+    if (!id) return;
+    if (target.checked && !draftProductIds.includes(id)) draftProductIds.push(id);
+    if (!target.checked) draftProductIds = draftProductIds.filter((item) => item !== id);
+    renderProductPicker();
+  });
+
+  productsHost?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const up = target.closest<HTMLButtonElement>('[data-product-up]');
+    const down = target.closest<HTMLButtonElement>('[data-product-down]');
+    const id = up?.dataset.productUp ?? down?.dataset.productDown;
+    if (!id) return;
+    const index = draftProductIds.indexOf(id);
+    if (up && index > 0) {
+      [draftProductIds[index - 1], draftProductIds[index]] = [draftProductIds[index], draftProductIds[index - 1]];
+    } else if (down && index < draftProductIds.length - 1) {
+      [draftProductIds[index + 1], draftProductIds[index]] = [draftProductIds[index], draftProductIds[index + 1]];
+    }
+    renderProductPicker();
   });
 </script>

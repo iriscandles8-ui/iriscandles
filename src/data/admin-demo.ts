@@ -45,7 +45,7 @@ export const demoOrders: DemoOrder[] = [
     total: 228_000,
     shipping: 0,
     items: [
-      { name: 'Otoño Dorado', size: '220 g', quantity: 1, unitPrice: 139_000 },
+      { name: 'Otoño Dorado', size: '240 g', quantity: 1, unitPrice: 139_000 },
       { name: 'Loto Esmeralda', size: '120 g', quantity: 1, unitPrice: 89_000 },
     ],
     createdAt: '2026-11-11T09:24:00-05:00',
@@ -78,7 +78,7 @@ export const demoOrders: DemoOrder[] = [
     payment: 'approved',
     total: 278_000,
     shipping: 0,
-    items: [{ name: 'Esencia del Valle', size: '220 g', quantity: 2, unitPrice: 139_000 }],
+    items: [{ name: 'Esencia del Valle', size: '240 g', quantity: 2, unitPrice: 139_000 }],
     createdAt: '2026-11-10T17:48:00-05:00',
     notes: 'Entregar antes del viernes.',
   },
@@ -95,7 +95,7 @@ export const demoOrders: DemoOrder[] = [
     total: 228_000,
     shipping: 0,
     items: [
-      { name: 'Otoño Dorado', size: '220 g', quantity: 1, unitPrice: 139_000 },
+      { name: 'Otoño Dorado', size: '240 g', quantity: 1, unitPrice: 139_000 },
       { name: 'Luz Serena', size: '120 g', quantity: 1, unitPrice: 89_000 },
     ],
     createdAt: '2026-11-09T11:12:00-05:00',
@@ -114,7 +114,7 @@ export const demoOrders: DemoOrder[] = [
     payment: 'approved',
     total: 139_000,
     shipping: 12_000,
-    items: [{ name: 'Loto Esmeralda', size: '220 g', quantity: 1, unitPrice: 139_000 }],
+    items: [{ name: 'Loto Esmeralda', size: '240 g', quantity: 1, unitPrice: 139_000 }],
     createdAt: '2026-11-07T15:30:00-05:00',
     tracking: 'ENV-88428710',
     carrier: 'Envía',
@@ -150,7 +150,7 @@ export const demoOrders: DemoOrder[] = [
     total: 367_000,
     shipping: 0,
     items: [
-      { name: 'Otoño Dorado', size: '220 g', quantity: 2, unitPrice: 139_000 },
+      { name: 'Otoño Dorado', size: '240 g', quantity: 2, unitPrice: 139_000 },
       { name: 'Esencia del Valle', size: '120 g', quantity: 1, unitPrice: 89_000 },
     ],
     createdAt: '2026-11-05T10:41:00-05:00',
@@ -185,7 +185,7 @@ export const demoOrders: DemoOrder[] = [
     payment: 'approved',
     total: 139_000,
     shipping: 12_000,
-    items: [{ name: 'Luz Serena', size: '220 g', quantity: 1, unitPrice: 139_000 }],
+    items: [{ name: 'Luz Serena', size: '240 g', quantity: 1, unitPrice: 139_000 }],
     createdAt: '2026-11-02T18:27:00-05:00',
     tracking: 'ENV-88426531',
     carrier: 'Envía',
@@ -204,7 +204,7 @@ export const demoOrders: DemoOrder[] = [
     shipping: 12_000,
     items: [
       { name: 'Loto Esmeralda', size: '120 g', quantity: 1, unitPrice: 89_000 },
-      { name: 'Luz Serena', size: '220 g', quantity: 1, unitPrice: 139_000 },
+      { name: 'Luz Serena', size: '240 g', quantity: 1, unitPrice: 139_000 },
     ],
     createdAt: '2026-10-30T13:55:00-05:00',
     tracking: 'ENV-88425904',
@@ -250,7 +250,7 @@ export const demoProducts: DemoProduct[] = [
     description: 'Manzana horneada, canela en rama y un fondo de madera dulce.',
     variants: [
       { id: 'var-otono-120', size: '120 g', weight: 120, sku: 'IRIS-OTONO-120', price: 89_000, cost: 34_500, stock: 24 },
-      { id: 'var-otono-220', size: '220 g', weight: 220, sku: 'IRIS-OTONO-220', price: 139_000, cost: 52_800, stock: 11 },
+      { id: 'var-otono-240', size: '240 g', weight: 240, sku: 'IRIS-OTONO-240', price: 139_000, cost: 52_800, stock: 11 },
     ],
   },
   {
@@ -265,7 +265,7 @@ export const demoProducts: DemoProduct[] = [
     description: 'Chontaduro del Pacífico y durazno maduro sobre una base de panela suave.',
     variants: [
       { id: 'var-valle-120', size: '120 g', weight: 120, sku: 'IRIS-VALLE-120', price: 89_000, cost: 35_200, stock: 18 },
-      { id: 'var-valle-220', size: '220 g', weight: 220, sku: 'IRIS-VALLE-220', price: 139_000, cost: 53_400, stock: 7 },
+      { id: 'var-valle-240', size: '240 g', weight: 240, sku: 'IRIS-VALLE-240', price: 139_000, cost: 53_400, stock: 7 },
     ],
   },
   {
@@ -280,7 +280,7 @@ export const demoProducts: DemoProduct[] = [
     description: 'Flor de loto, hojas verdes y un soplo de aire fresco sobre almizcle limpio.',
     variants: [
       { id: 'var-loto-120', size: '120 g', weight: 120, sku: 'IRIS-LOTO-120', price: 89_000, cost: 34_800, stock: 4 },
-      { id: 'var-loto-220', size: '220 g', weight: 220, sku: 'IRIS-LOTO-220', price: 139_000, cost: 52_600, stock: 9 },
+      { id: 'var-loto-240', size: '240 g', weight: 240, sku: 'IRIS-LOTO-240', price: 139_000, cost: 52_600, stock: 9 },
     ],
   },
   {
@@ -295,7 +295,7 @@ export const demoProducts: DemoProduct[] = [
     description: 'Vainilla cremosa, jazmín blanco y un fondo de ámbar suave.',
     variants: [
       { id: 'var-luz-120', size: '120 g', weight: 120, sku: 'IRIS-LUZ-120', price: 89_000, cost: 35_000, stock: 21 },
-      { id: 'var-luz-220', size: '220 g', weight: 220, sku: 'IRIS-LUZ-220', price: 139_000, cost: 53_100, stock: 3 },
+      { id: 'var-luz-240', size: '240 g', weight: 240, sku: 'IRIS-LUZ-240', price: 139_000, cost: 53_100, stock: 3 },
     ],
   },
 ];
@@ -419,10 +419,10 @@ export const demoMonths: DemoMonth[] = [
 ];
 
 export const demoTopProducts = [
-  { name: 'Otoño Dorado', size: '220 g', units: 58, revenue: 8_062_000 },
-  { name: 'Luz Serena', size: '220 g', units: 44, revenue: 6_116_000 },
+  { name: 'Otoño Dorado', size: '240 g', units: 58, revenue: 8_062_000 },
+  { name: 'Luz Serena', size: '240 g', units: 44, revenue: 6_116_000 },
   { name: 'Loto Esmeralda', size: '120 g', units: 39, revenue: 3_471_000 },
-  { name: 'Esencia del Valle', size: '220 g', units: 31, revenue: 4_309_000 },
+  { name: 'Esencia del Valle', size: '240 g', units: 31, revenue: 4_309_000 },
   { name: 'Otoño Dorado', size: '120 g', units: 27, revenue: 2_403_000 },
 ];
 
@@ -450,6 +450,14 @@ export const demoStatsRanges: Record<string, { revenue: number; orders: number; 
 
 /* -------------------------- Promociones -------------------------- */
 
+export type PromoUsage = {
+  id: string;
+  date: string;
+  customer: string;
+  order: string;
+  discount: number;
+};
+
 export type DemoPromo = {
   id: string;
   name: string;
@@ -457,18 +465,118 @@ export type DemoPromo = {
   type: 'percent' | 'fixed' | 'bundle' | 'birthday' | 'points';
   value: number;
   minTotal: number;
+  startsAt: string | null;
+  endsAt: string | null;
   uses: number;
   maxUses: number | null;
-  endsAt: string | null;
+  maxUsesPerCustomer: number | null;
+  usageHistory: PromoUsage[];
   active: boolean;
 };
 
 export const demoPromos: DemoPromo[] = [
-  { id: 'promo-1', name: 'Bienvenida', code: 'BIENVENIDA10', type: 'percent', value: 10, minTotal: 0, uses: 34, maxUses: null, endsAt: null, active: true },
-  { id: 'promo-2', name: 'Especial de otoño', code: 'OTONO15', type: 'percent', value: 15, minTotal: 120_000, uses: 12, maxUses: 50, endsAt: '2026-11-30', active: true },
-  { id: 'promo-3', name: 'Envío gratis', code: 'ENVIOGRATIS', type: 'fixed', value: 12_000, minTotal: 180_000, uses: 27, maxUses: null, endsAt: null, active: true },
-  { id: 'promo-4', name: 'Dúo de velas', code: 'DUO220', type: 'bundle', value: 20_000, minTotal: 0, uses: 8, maxUses: 30, endsAt: '2026-12-15', active: false },
-  { id: 'promo-5', name: 'Cumpleaños Iris', code: 'CUMPLE15', type: 'birthday', value: 15, minTotal: 0, uses: 6, maxUses: null, endsAt: null, active: true },
+  {
+    id: 'promo-1', name: 'Bienvenida', code: 'BIENVENIDA10', type: 'percent', value: 10, minTotal: 0,
+    startsAt: '2026-01-01', endsAt: null, uses: 34, maxUses: null, maxUsesPerCustomer: 1, active: true,
+    usageHistory: [
+      { id: 'u-1', date: '2026-11-11T17:24:00', customer: 'Andrés Mejía', order: 'IRI-1042', discount: 8_900 },
+      { id: 'u-2', date: '2026-11-08T11:03:00', customer: 'Mariana López', order: 'IRI-1031', discount: 12_400 },
+      { id: 'u-3', date: '2026-10-29T19:45:00', customer: 'Daniela Ríos', order: 'IRI-0987', discount: 17_800 },
+    ],
+  },
+  {
+    id: 'promo-2', name: 'Especial de otoño', code: 'OTONO15', type: 'percent', value: 15, minTotal: 120_000,
+    startsAt: '2026-09-01', endsAt: '2026-11-30', uses: 12, maxUses: 50, maxUsesPerCustomer: 2, active: true,
+    usageHistory: [
+      { id: 'u-4', date: '2026-11-10T15:12:00', customer: 'Camila Restrepo', order: 'IRI-1039', discount: 32_850 },
+      { id: 'u-5', date: '2026-11-05T10:38:00', customer: 'Sebastián Ortiz', order: 'IRI-1022', discount: 18_000 },
+      { id: 'u-6', date: '2026-10-21T13:56:00', customer: 'Valentina Gómez', order: 'IRI-0998', discount: 24_600 },
+    ],
+  },
+  {
+    id: 'promo-3', name: 'Envío gratis', code: 'ENVIOGRATIS', type: 'fixed', value: 12_000, minTotal: 180_000,
+    startsAt: '2026-03-15', endsAt: null, uses: 27, maxUses: null, maxUsesPerCustomer: null, active: true,
+    usageHistory: [
+      { id: 'u-7', date: '2026-11-11T09:05:00', customer: 'Felipe Vargas', order: 'IRI-1044', discount: 12_000 },
+      { id: 'u-8', date: '2026-11-02T16:20:00', customer: 'Laura Cárdenas', order: 'IRI-1018', discount: 12_000 },
+    ],
+  },
+  {
+    id: 'promo-4', name: 'Dúo de velas', code: 'DUO220', type: 'bundle', value: 20_000, minTotal: 0,
+    startsAt: '2026-10-01', endsAt: '2026-12-15', uses: 8, maxUses: 30, maxUsesPerCustomer: 1, active: false,
+    usageHistory: [
+      { id: 'u-9', date: '2026-10-18T12:41:00', customer: 'Juan Pablo Herrera', order: 'IRI-0971', discount: 20_000 },
+    ],
+  },
+  {
+    id: 'promo-5', name: 'Cumpleaños Iris', code: 'CUMPLE15', type: 'birthday', value: 15, minTotal: 0,
+    startsAt: null, endsAt: null, uses: 6, maxUses: null, maxUsesPerCustomer: 1, active: true,
+    usageHistory: [
+      { id: 'u-10', date: '2026-11-09T08:30:00', customer: 'Laura Cárdenas', order: 'IRI-1025', discount: 26_700 },
+      { id: 'u-11', date: '2026-11-02T18:10:00', customer: 'Mariana López', order: 'IRI-1014', discount: 9_300 },
+    ],
+  },
+];
+
+/* --------- Descuentos especiales por temporada (sin código) --------- */
+
+export type CampaignType = 'percent' | 'fixed';
+export type CampaignApplication = 'store' | 'collection' | 'product';
+export type CampaignState = 'enabled' | 'paused';
+
+export type DemoCampaign = {
+  id: string;
+  name: string;
+  type: CampaignType;
+  value: number;
+  application: CampaignApplication;
+  targets: string[];
+  minTotalCop: number;
+  startsAt: string;
+  endsAt: string;
+  usageLimit: number | null;
+  uses: number;
+  customers: 'all' | 'selected';
+  customerIds: string[];
+  state: CampaignState;
+  createdAt: string;
+};
+
+export const demoCampaigns: DemoCampaign[] = [
+  {
+    id: 'cmp-1', name: 'Navidad', type: 'percent', value: 15, application: 'store', targets: [],
+    minTotalCop: 0, startsAt: '2026-12-01T00:00', endsAt: '2026-12-31T23:59',
+    usageLimit: null, uses: 0, customers: 'all', customerIds: [], state: 'enabled',
+    createdAt: '2026-10-20T09:00:00',
+  },
+  {
+    id: 'cmp-2', name: 'San Valentín', type: 'percent', value: 20, application: 'collection',
+    targets: ['esencia-del-valle'], minTotalCop: 120_000,
+    startsAt: '2027-02-01T00:00', endsAt: '2027-02-14T23:59',
+    usageLimit: 200, uses: 0, customers: 'all', customerIds: [], state: 'enabled',
+    createdAt: '2026-10-22T11:30:00',
+  },
+  {
+    id: 'cmp-3', name: 'Día de la Madre', type: 'percent', value: 15, application: 'product',
+    targets: ['IRIS-LUZ-120', 'IRIS-LUZ-240'], minTotalCop: 0,
+    startsAt: '2027-05-01T00:00', endsAt: '2027-05-09T23:59',
+    usageLimit: 150, uses: 0, customers: 'all', customerIds: [], state: 'enabled',
+    createdAt: '2026-10-25T16:15:00',
+  },
+  {
+    id: 'cmp-4', name: 'Temporada especial de otoño', type: 'fixed', value: 12_000,
+    application: 'store', targets: [], minTotalCop: 180_000,
+    startsAt: '2026-09-01T00:00', endsAt: '2026-11-30T23:59',
+    usageLimit: 100, uses: 64, customers: 'all', customerIds: [], state: 'enabled',
+    createdAt: '2026-08-28T10:00:00',
+  },
+  {
+    id: 'cmp-5', name: 'Preventa colección Ámbar', type: 'percent', value: 10,
+    application: 'collection', targets: ['otono-dorado'], minTotalCop: 0,
+    startsAt: '2026-10-01T00:00', endsAt: '2026-10-31T23:59',
+    usageLimit: null, uses: 37, customers: 'selected', customerIds: ['cus-1', 'cus-3', 'cus-7'],
+    state: 'paused', createdAt: '2026-09-20T14:45:00',
+  },
 ];
 
 /* ------------------------- Configuración ------------------------- */

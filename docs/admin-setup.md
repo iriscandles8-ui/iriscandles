@@ -34,6 +34,9 @@ En **SQL Editor → New query**, puedes ejecutar un solo archivo:
 
 1. `db/setup.sql` — contiene `schema.sql` + `admin.sql` en orden, **incluido el cierre de
    `confirm_order()` al público**. Esta es la opción recomendada.
+2. `db/collections.sql` — amplía `collections`, crea `collection_images` (fotos de colección,
+   separadas de las de producto), `product_collections` (muchos a muchos) y el bucket
+   `collection-images`. Necesario para la pestaña **Colecciones** de `/admin/productos`.
 
 Si prefieres hacerlo por partes:
 

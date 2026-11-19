@@ -10,7 +10,7 @@ import { collections, type Collection, type ProductSize } from './collections';
  */
 export const PROVISIONAL_PRICES: Record<number, number> = {
   120: 89000,
-  220: 139000,
+  240: 139000,
 };
 
 export const shipping = {

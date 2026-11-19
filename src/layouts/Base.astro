@@ -8,6 +8,7 @@ import '../styles/global.css';
 import Navbar from '../components/Navbar.astro';
 import Footer from '../components/Footer.astro';
 import SocialRail from '../components/SocialRail.astro';
+import { getCartCatalog } from '../lib/store-catalog';
 
 interface Props {
   title?: string;
@@ -22,6 +23,11 @@ const {
   image = '/brand/og-iris-candles.png',
   noindex = false,
 } = Astro.props;
+
+// Catálogo por SKU para el carrito del navegador (nombre, tema y precio).
+// Se serializa sin `</script>` para que el JSON no corte el HTML.
+const cartCatalog = await getCartCatalog();
+const cartCatalogJson = JSON.stringify(cartCatalog).replace(/</g, '\\u003c');
 
 const site = Astro.site ?? new URL('https://iriscandles.com');
 const canonical = new URL(Astro.url.pathname, site);
@@ -87,6 +93,9 @@ const jsonLd = {
     <Footer />
 
     <SocialRail />
+
+    <!-- Catálogo por SKU (Supabase) para el carrito y el checkout. -->
+    <script type="application/json" id="iris-catalog" set:html={cartCatalogJson} />
 
     <script>
       const elements = document.querySelectorAll<HTMLElement>('[data-reveal]');

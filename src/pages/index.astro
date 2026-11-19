@@ -3,9 +3,12 @@ import Base from '../layouts/Base.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import ProductCard from '../components/ProductCard.astro';
 import CandleVisual from '../components/CandleVisual.astro';
-import CandleAccent from '../components/CandleAccent.astro';
 import NewsletterForm from '../components/NewsletterForm.astro';
-import { collections } from '../data/collections';
+import { getStoreCollections } from '../lib/collection-data';
+
+export const prerender = false;
+
+const collections = await getStoreCollections();
 
 const ritual = [
   {
@@ -30,14 +33,6 @@ const ritual = [
   <!-- Hero -->
   <section class="relative overflow-hidden">
     <div class="texture-paper pointer-events-none absolute inset-0 opacity-[0.04]"></div>
-
-    <CandleAccent
-      src="/candles/vela-taper-laton.webp"
-      width={800}
-      height={1000}
-      class="absolute bottom-0 left-2 hidden w-20 2xl:block xl:w-24"
-      delay={1.4}
-    />
 
     <div class="container-iris grid items-center gap-14 py-16 lg:grid-cols-12 lg:py-24">
       <div class="lg:col-span-7" data-reveal>
@@ -143,15 +138,6 @@ const ritual = [
           Una vela no se consume: se acompaña. Estos son los gestos que hacen que dure más y
           huela mejor.
         </p>
-
-        <CandleAccent
-          src="/candles/vela-grupo-ambar.webp"
-          width={868}
-          height={758}
-          class="mt-9 hidden w-40 sm:block lg:w-56"
-          delay={0.6}
-          glow
-        />
       </div>
 
       <ol class="grid gap-10 sm:grid-cols-3 lg:col-span-8">
@@ -239,13 +225,6 @@ const ritual = [
       />
       <div class="lg:justify-self-end">
         <NewsletterForm />
-        <CandleAccent
-          src="/candles/vela-par-crema.webp"
-          width={1400}
-          height={1100}
-          class="ml-auto mt-10 hidden w-56 lg:block xl:w-64"
-          delay={2}
-        />
       </div>
     </div>
   </section>

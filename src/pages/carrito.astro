@@ -1,6 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
 import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
+
+// SSR para que el carrito use el catálogo vigente (no el del build).
+export const prerender = false;
 ---
 
 <Base
@@ -121,11 +124,43 @@ import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
                 <dt class="text-ink/75">Envío estimado</dt>
                 <dd class="font-medium text-jade-900" data-shipping>—</dd>
               </div>
+              <div class="flex items-baseline justify-between gap-4 text-jade-700" data-discount-row hidden>
+                <dt class="text-jade-700">Descuento <span data-discount-code></span></dt>
+                <dd class="font-medium" data-discount>—</dd>
+              </div>
               <div class="flex items-baseline justify-between gap-4 border-t border-cream-300 pt-3">
                 <dt class="font-medium text-jade-900">Total</dt>
                 <dd class="font-display text-xl text-jade-900" data-total>—</dd>
               </div>
             </dl>
+
+            <div class="mt-5 border-t border-cream-300 pt-4">
+              <label for="coupon-code" class="text-[0.68rem] font-medium text-jade-900">
+                ¿Tienes un código de descuento?
+              </label>
+              <div class="mt-2 flex gap-2">
+                <input
+                  id="coupon-code"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  maxlength="40"
+                  placeholder="Ej. BIENVENIDA10"
+                  class="field min-w-0 flex-1 uppercase"
+                />
+                <button type="button" class="btn-outline shrink-0" data-apply-coupon>Aplicar</button>
+              </div>
+              <p data-coupon-message hidden class="mt-2 text-[0.68rem] leading-relaxed" role="status"></p>
+              <div data-coupon-applied hidden class="mt-3 flex items-center justify-between gap-2 border border-dashed border-jade-900/25 bg-cream-100/60 px-3 py-2">
+                <div class="min-w-0">
+                  <p class="text-[0.6rem] uppercase tracking-[0.12em] text-jade-900/60">Cupón aplicado</p>
+                  <p class="truncate font-mono text-[0.72rem] font-medium text-jade-900" data-coupon-label></p>
+                </div>
+                <button type="button" class="shrink-0 text-[0.66rem] text-ink/70 underline underline-offset-2 hover:text-terracotta-700" data-remove-coupon>
+                  Quitar
+                </button>
+              </div>
+            </div>
 
             <div class="mt-5" data-free-progress>
               <div class="flex items-baseline justify-between gap-3 text-[0.66rem] text-ink/70">
@@ -186,7 +221,21 @@ import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
 </Base>
 
 <script>
-  import { CART_EVENT, clearCart, formatCOP, getLines, getTotals, readCart, removeFromCart, setQty } from '../lib/cart';
+  import {
+    CART_EVENT,
+    clearCart,
+    clearCoupon,
+    formatCOP,
+    getLines,
+    getTotals,
+    readCart,
+    readCoupon,
+    removeFromCart,
+    saveCoupon,
+    setQty,
+    type StoredCoupon,
+  } from '../lib/cart';
+  import { couponDiscountCop } from '../lib/coupons';
   import { shipping } from '../data/pricing';
 
   const loading = document.querySelector<HTMLElement>('[data-cart-loading]');
@@ -201,6 +250,14 @@ import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
   const freeLabel = document.querySelector<HTMLElement>('[data-free-label]');
   const freeAmount = document.querySelector<HTMLElement>('[data-free-amount]');
   const freeBar = document.querySelector<HTMLElement>('[data-free-bar]');
+  const couponInput = document.querySelector<HTMLInputElement>('#coupon-code');
+  const applyCouponButton = document.querySelector<HTMLButtonElement>('[data-apply-coupon]');
+  const couponMessage = document.querySelector<HTMLElement>('[data-coupon-message]');
+  const couponApplied = document.querySelector<HTMLElement>('[data-coupon-applied]');
+  const couponLabelEl = document.querySelector<HTMLElement>('[data-coupon-label]');
+  const discountRow = document.querySelector<HTMLElement>('[data-discount-row]');
+  const discountEl = document.querySelector<HTMLElement>('[data-discount]');
+  const discountCodeEl = document.querySelector<HTMLElement>('[data-discount-code]');
 
   function escapeHtml(value: string): string {
     return value.replace(/[&<>"']/g, (char) => {
@@ -262,7 +319,10 @@ import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
   function render(announce?: string) {
     const items = readCart();
     const lines = getLines(items);
-    const totals = getTotals(lines);
+    const coupon = readCoupon();
+    // El importe se recalcula con el subtotal vigente; el servidor lo valida al pagar.
+    const discountCop = coupon ? couponDiscountCop(coupon, getTotals(lines).subtotalCop) : 0;
+    const totals = getTotals(lines, discountCop);
 
     if (loading) loading.hidden = true;
 
@@ -285,6 +345,13 @@ import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
       shippingEl.textContent = totals.isFreeShipping ? 'Gratis' : formatCOP(totals.shippingCop);
       shippingEl.classList.toggle('text-jade-700', totals.isFreeShipping);
     }
+    if (discountRow) discountRow.hidden = !coupon || totals.discountCop <= 0;
+    if (discountEl) discountEl.textContent = totals.discountCop ? `−${formatCOP(totals.discountCop)}` : '—';
+    if (discountCodeEl) discountCodeEl.textContent = coupon ? `(${coupon.code})` : '';
+    if (couponApplied) couponApplied.hidden = !coupon;
+    if (couponLabelEl) couponLabelEl.textContent = coupon?.label ?? '';
+    if (couponInput) couponInput.disabled = !coupon;
+    if (applyCouponButton) applyCouponButton.hidden = Boolean(coupon);
     if (totalEl) totalEl.textContent = formatCOP(totals.totalCop);
 
     const progress = Math.min(100, Math.round((totals.subtotalCop / shipping.freeFromCop) * 100));
@@ -344,6 +411,73 @@ import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
     if (!window.confirm('¿Vaciar el carrito? Se quitarán todos los productos.')) return;
     clearCart();
     render('Carrito vaciado.');
+  });
+
+  function setCouponMessage(message: string, tone: 'ok' | 'warn') {
+    if (!couponMessage) return;
+    couponMessage.textContent = message;
+    couponMessage.hidden = false;
+    couponMessage.className = `mt-2 text-[0.68rem] leading-relaxed ${
+      tone === 'ok' ? 'text-jade-700' : 'text-terracotta-700'
+    }`;
+  }
+
+  applyCouponButton?.addEventListener('click', async () => {
+    const code = (couponInput?.value ?? '').trim();
+    if (!code) {
+      setCouponMessage('Escribe un código de descuento.', 'warn');
+      return;
+    }
+
+    const original = applyCouponButton.textContent;
+    applyCouponButton.disabled = true;
+    applyCouponButton.textContent = 'Validando…';
+    try {
+      const response = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          subtotalCop: getTotals(getLines()).subtotalCop,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        coupon?: StoredCoupon;
+      };
+
+      if (!response.ok || !data.ok || !data.coupon) {
+        setCouponMessage(data.error || 'No pudimos aplicar el cupón.', 'warn');
+        return;
+      }
+
+      saveCoupon(data.coupon);
+      if (couponInput) couponInput.value = '';
+      setCouponMessage('Cupón aplicado al pedido.', 'ok');
+      render('Cupón aplicado.');
+    } catch {
+      setCouponMessage('No pudimos validar el cupón. Inténtalo de nuevo.', 'warn');
+    } finally {
+      applyCouponButton.disabled = false;
+      applyCouponButton.textContent = original ?? 'Aplicar';
+    }
+  });
+
+  couponInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      applyCouponButton?.click();
+    }
+  });
+
+  document.querySelector('[data-remove-coupon]')?.addEventListener('click', () => {
+    clearCoupon();
+    if (couponMessage) {
+      couponMessage.hidden = true;
+      couponMessage.textContent = '';
+    }
+    render('Cupón quitado.');
   });
 
   window.addEventListener(CART_EVENT, () => render());

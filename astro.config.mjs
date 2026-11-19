@@ -15,5 +15,10 @@ export default defineConfig({
   ],
   vite: {
     plugins: [tailwindcss()],
+    // El plugin de Cloudflare valida dist/server/entry.mjs durante el build;
+    // vaciar dist lo borra antes de tiempo, así que limpiamos manualmente.
+    build: {
+      emptyOutDir: false,
+    },
   },
 });

@@ -474,6 +474,8 @@ alter table orders add column if not exists shipped_at timestamptz;
 alter table orders add column if not exists carrier text;
 alter table orders add column if not exists tracking_number text;
 alter table orders add column if not exists payment_method text;
+alter table orders add column if not exists coupon_code text;
+alter table orders add column if not exists discount_cop int not null default 0;
 
 alter table reviews add column if not exists admin_reply text;
 alter table reviews add column if not exists replied_at timestamptz;
@@ -792,11 +794,90 @@ insert into settings (key, value) values
   ('shipping', '{"free_from_cop":180000,"default_eta":"1-3 días hábiles","zones":[]}'::jsonb),
   ('payments', '{"provider":"wompi","methods":["PSE","Nequi","Daviplata","Tarjetas"],"sandbox":true}'::jsonb),
   ('policies', '{"returns_days":5,"privacy_version":"2026-11","warranty":"Reemplazo por daños en transporte"}'::jsonb),
-  ('loyalty', '{"enabled":true,"points_per_1000":1,"point_value_cop":100,"birthday_discount_percent":15}'::jsonb)
+  ('loyalty', '{"enabled":true,"points_per_1000":1,"point_value_cop":100,"birthday_discount_percent":15,"birthday_only_registered":true,"birthday_days_ahead":3,"birthday_validity_days":7,"birthday_once_per_birthday":true,"birthday_email_enabled":true,"points_expire_months":12,"points_min_redeem":500,"points_earn_on":"approved_orders"}'::jsonb),
+  ('promotions.campaigns', '[{"id":"cmp-1","name":"Navidad","type":"percent","value":15,"application":"store","targets":[],"minTotalCop":0,"startsAt":"2026-12-01T00:00","endsAt":"2026-12-31T23:59","usageLimit":null,"uses":0,"customers":"all","customerIds":[],"state":"enabled","createdAt":"2026-10-20T09:00:00"},{"id":"cmp-2","name":"San Valentín","type":"percent","value":20,"application":"collection","targets":["esencia-del-valle"],"minTotalCop":120000,"startsAt":"2027-02-01T00:00","endsAt":"2027-02-14T23:59","usageLimit":200,"uses":0,"customers":"all","customerIds":[],"state":"enabled","createdAt":"2026-10-22T11:30:00"},{"id":"cmp-3","name":"Día de la Madre","type":"percent","value":15,"application":"product","targets":["IRIS-LUZ-120","IRIS-LUZ-220"],"minTotalCop":0,"startsAt":"2027-05-01T00:00","endsAt":"2027-05-09T23:59","usageLimit":150,"uses":0,"customers":"all","customerIds":[],"state":"enabled","createdAt":"2026-10-25T16:15:00"},{"id":"cmp-4","name":"Temporada especial de otoño","type":"fixed","value":12000,"application":"store","targets":[],"minTotalCop":180000,"startsAt":"2026-09-01T00:00","endsAt":"2026-11-30T23:59","usageLimit":100,"uses":64,"customers":"all","customerIds":[],"state":"enabled","createdAt":"2026-08-28T10:00:00"},{"id":"cmp-5","name":"Preventa colección Ámbar","type":"percent","value":10,"application":"collection","targets":["otono-dorado"],"minTotalCop":0,"startsAt":"2026-10-01T00:00","endsAt":"2026-10-31T23:59","usageLimit":null,"uses":37,"customers":"selected","customerIds":["cus-1","cus-3","cus-7"],"state":"paused","createdAt":"2026-09-20T14:45:00"}]'::jsonb)
 on conflict (key) do nothing;
 
+-- Cupones de ejemplo para probar el campo del carrito (sin acceso público).
+insert into coupons (code, type, value, min_total_cop, starts_at, expires_at, max_uses, is_active) values
+  ('BIENVENIDA10', 'percent', 10, 0, now(), null, null, true),
+  ('OTONO15', 'percent', 15, 120000, now(), '2026-11-30T23:59:59Z', 50, true),
+  ('ENVIOGRATIS', 'fixed', 12900, 180000, now(), null, null, true)
+on conflict (code) do nothing;
+
+-- ============================================================
+-- 9. BIBLIOTECA MULTIMEDIA (db/media-library.sql)
+-- ============================================================
+
+create table if not exists media_assets (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (char_length(name) between 1 and 120),
+  file_name   text not null,
+  bucket      text not null default 'product-images'
+    check (bucket in ('product-images', 'collection-images')),
+  path        text not null unique,
+  url         text not null,
+  alt         text,
+  mime_type   text not null default 'image/jpeg',
+  size_bytes  bigint not null default 0 check (size_bytes >= 0),
+  width       int check (width is null or width > 0),
+  height      int check (height is null or height > 0),
+  created_by  uuid references auth.users(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+alter table media_assets add column if not exists bucket text not null default 'product-images'
+  check (bucket in ('product-images', 'collection-images'));
+
+create index if not exists media_assets_path_idx on media_assets(path);
+create index if not exists media_assets_name_idx on media_assets(name);
+
+alter table media_assets enable row level security;
+
+drop policy if exists "staff_media_assets_read" on media_assets;
+create policy "staff_media_assets_read" on media_assets
+  for select using (public.has_permission('products', 'read'));
+
+drop policy if exists "staff_media_assets_insert" on media_assets;
+create policy "staff_media_assets_insert" on media_assets
+  for insert with check (public.has_permission('products', 'write'));
+
+drop policy if exists "staff_media_assets_update" on media_assets;
+create policy "staff_media_assets_update" on media_assets
+  for update using (public.has_permission('products', 'write'))
+  with check (public.has_permission('products', 'write'));
+
+drop policy if exists "staff_media_assets_delete" on media_assets;
+create policy "staff_media_assets_delete" on media_assets
+  for delete using (public.has_permission('products', 'write'));
+
+insert into storage.buckets (id, name, public)
+values ('collection-images', 'collection-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "collection_images_public_read" on storage.objects;
+create policy "collection_images_public_read" on storage.objects
+  for select using (bucket_id = 'collection-images');
+
+drop policy if exists "staff_media_objects_insert" on storage.objects;
+create policy "staff_media_objects_insert" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'product-images' and public.has_permission('products', 'write'));
+
+drop policy if exists "staff_media_objects_update" on storage.objects;
+create policy "staff_media_objects_update" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'product-images' and public.has_permission('products', 'write'))
+  with check (bucket_id = 'product-images' and public.has_permission('products', 'write'));
+
+drop policy if exists "staff_media_objects_delete" on storage.objects;
+create policy "staff_media_objects_delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'product-images' and public.has_permission('products', 'write'));
+
 -- ------------------------------------------------------------
--- 9. CREAR EL PRIMER OWNER
+-- 10. CREAR EL PRIMER OWNER
 -- 1) Crea el usuario en Supabase -> Authentication -> Users.
 -- 2) Copia su UUID y ejecuta:
 --    insert into admin_users (user_id, role)

@@ -50,8 +50,10 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'clientes', label: 'Clientes', href: '/admin/clientes', icon: 'users', group: 'Operación' },
   { id: 'resenas', label: 'Reseñas', href: '/admin/resenas', icon: 'star', group: 'Operación', badge: 'reviews' },
   { id: 'productos', label: 'Productos', href: '/admin/productos', icon: 'tag', group: 'Catálogo' },
+  { id: 'medios', label: 'Biblioteca', href: '/admin/medios', icon: 'image', group: 'Catálogo' },
   { id: 'inventario', label: 'Inventario', href: '/admin/inventario', icon: 'box', group: 'Catálogo', badge: 'stock' },
   { id: 'promociones', label: 'Promociones', href: '/admin/promociones', icon: 'percent', group: 'Catálogo' },
+  { id: 'descuentos', label: 'Descuentos', href: '/admin/descuentos', icon: 'calendar', group: 'Catálogo' },
   { id: 'estadisticas', label: 'Estadísticas', href: '/admin/estadisticas', icon: 'chart', group: 'Negocio' },
   { id: 'configuracion', label: 'Configuración', href: '/admin/configuracion', icon: 'settings', group: 'Negocio' },
 ];
@@ -156,9 +158,17 @@ export const formatCompactCOP = (value: number): string => {
   return formatCOP(value);
 };
 
+/**
+ * `YYYY-MM-DD` se parsea como UTC medianoche; al formatearlo en hora local
+ * (UTC-5) se mostraba el día anterior. Las fechas sin hora se interpretan
+ * en hora local para que el día mostrado sea siempre el configurado.
+ */
+const parseDateInput = (iso: string): Date =>
+  new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso);
+
 export const formatDate = (iso: string | null | undefined): string => {
   if (!iso) return '—';
-  const date = new Date(iso);
+  const date = parseDateInput(iso);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }).format(
     date,
@@ -167,14 +177,14 @@ export const formatDate = (iso: string | null | undefined): string => {
 
 export const formatDateShort = (iso: string | null | undefined): string => {
   if (!iso) return '—';
-  const date = new Date(iso);
+  const date = parseDateInput(iso);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: 'short' }).format(date);
 };
 
 export const formatDateTime = (iso: string | null | undefined): string => {
   if (!iso) return '—';
-  const date = new Date(iso);
+  const date = parseDateInput(iso);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('es-CO', {
     day: '2-digit',
@@ -236,6 +246,13 @@ export const PROMO_TYPES: Record<string, string> = {
   bundle: 'Combo',
   birthday: 'Cumpleaños',
   points: 'Puntos',
+};
+
+export const DISCOUNT_SCOPES: Record<string, string> = {
+  season: 'Temporada',
+  collection: 'Colección',
+  product: 'Producto',
+  store: 'Tienda completa',
 };
 
 /* --------------------------- CSV --------------------------- */

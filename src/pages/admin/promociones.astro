@@ -3,26 +3,89 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import PageHeader from '../../components/admin/PageHeader.astro';
 import StatCard from '../../components/admin/StatCard.astro';
 import AdminIcon from '../../components/admin/AdminIcon.astro';
-import { formatCOP, formatCompactCOP, formatDate, PROMO_TYPES } from '../../lib/admin';
-import { demoPromos, demoCustomers } from '../../data/admin-demo';
-import { getCustomers, getPromotions } from '../../lib/admin-data';
+import {
+  formatCOP,
+  formatCompactCOP,
+  formatDate,
+  formatDateTime,
+  PROMO_TYPES,
+} from '../../lib/admin';
+import {
+  CAMPAIGN_STATUS_LABELS,
+  CAMPAIGN_STATUS_TONES,
+  resolveCampaignStatus,
+} from '../../lib/promotions';
+import { collections } from '../../data/collections';
+import { demoPromos, demoCustomers, demoCampaigns } from '../../data/admin-demo';
+import { getCustomers, getPromotions, getSettings, getCampaigns } from '../../lib/admin-data';
 import { createSupabaseServer } from '../../lib/supabase-server';
 
 export const prerender = false;
 
 const supabase = createSupabaseServer(Astro);
 const promos = supabase ? await getPromotions(supabase) : demoPromos;
+const campaigns = supabase ? await getCampaigns(supabase) : demoCampaigns;
 const customers = supabase ? await getCustomers(supabase) : demoCustomers;
+const settings = supabase ? await getSettings(supabase) : {};
+const loyaltyRow =
+  settings.loyalty && typeof settings.loyalty === 'object'
+    ? (settings.loyalty as Record<string, unknown>)
+    : {};
+
+const numSetting = (value: unknown, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const loyalty = {
+  pointsPer1000: numSetting(loyaltyRow.points_per_1000, 1),
+  pointValueCop: numSetting(loyaltyRow.point_value_cop, 100),
+  minRedeem: numSetting(loyaltyRow.points_min_redeem, 500),
+  expireMonths: numSetting(loyaltyRow.points_expire_months, 12),
+  birthdayPercent: numSetting(loyaltyRow.birthday_discount_percent, 15),
+  birthdayDays: numSetting(loyaltyRow.birthday_days_ahead, 3),
+  birthdayValidityDays: numSetting(loyaltyRow.birthday_validity_days, 7),
+  birthdayOnlyRegistered: loyaltyRow.birthday_only_registered !== false,
+  birthdayOncePerYear: loyaltyRow.birthday_once_per_birthday !== false,
+  birthdayEmail: loyaltyRow.birthday_email_enabled !== false,
+};
+
+const now = new Date();
+const currentMonth = now.getMonth() + 1;
 
 const active = promos.filter((promo) => promo.active).length;
+const specialActive = campaigns.filter((campaign) => resolveCampaignStatus(campaign, now) === 'active').length;
 const uses = promos.reduce((sum, promo) => sum + promo.uses, 0);
 const points = customers.reduce((sum, customer) => sum + customer.points, 0);
 const discountedRevenue = supabase ? 0 : 4_860_000;
+
+const birthdayCustomers = customers.filter(
+  (customer) => Number(customer.birthday.slice(5, 7)) === currentMonth,
+);
 
 const valueLabel = (promo: (typeof promos)[number]) => {
   if (promo.type === 'percent' || promo.type === 'birthday') return `${promo.value}%`;
   if (promo.type === 'points') return `${promo.value} pts`;
   return formatCOP(promo.value);
+};
+
+const applicationLabels: Record<string, string> = {
+  store: 'Toda la tienda',
+  collection: 'Colecciones',
+  product: 'Productos',
+};
+
+const campaignValueLabel = (campaign: (typeof campaigns)[number]): string =>
+  campaign.type === 'percent' ? `${campaign.value}%` : formatCOP(campaign.value);
+
+const campaignTargets = (campaign: (typeof campaigns)[number]): string => {
+  if (campaign.application === 'store' || campaign.targets.length === 0) return 'Toda la tienda';
+  if (campaign.application === 'collection') {
+    return campaign.targets
+      .map((slug) => collections.find((item) => item.slug === slug)?.name ?? slug)
+      .join(', ');
+  }
+  return campaign.targets.join(', ');
 };
 ---
 
@@ -30,7 +93,7 @@ const valueLabel = (promo: (typeof promos)[number]) => {
   <PageHeader
     eyebrow="Catálogo"
     title="Promociones"
-    description="Descuentos, cumpleaños y puntos. Crea códigos, define vigencias y mide cuánto mueven las ventas."
+    description="Cupones, descuentos automáticos, cumpleaños y puntos. Configura condiciones, vigencias y mide cuánto mueven las ventas."
   >
     <button type="button" slot="actions" class="admin-btn admin-btn-primary" data-new-promo>
       <AdminIcon name="plus" size={15} />
@@ -38,19 +101,26 @@ const valueLabel = (promo: (typeof promos)[number]) => {
     </button>
   </PageHeader>
 
-  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
     <StatCard label="Cupones activos" value={String(active)} icon="percent" hint={`${promos.length} en total`} />
-    <StatCard label="Usos acumulados" value={String(uses)} icon="tag" hint="desde el lanzamiento" />
-    <StatCard label="Ventas con descuento" value={formatCompactCOP(discountedRevenue)} icon="coins" hint="últimos 90 días" />
+    <StatCard label="Usos acumulados" value={String(uses)} icon="coins" hint="desde el lanzamiento" />
+    <StatCard label="Ventas con descuento" value={formatCompactCOP(discountedRevenue)} icon="chart" hint="últimos 90 días" />
     <StatCard label="Puntos otorgados" value={points.toLocaleString('es-CO')} icon="sparkles" hint="saldo de clientes" />
+    <StatCard
+      label="Descuentos automáticos"
+      value={String(specialActive)}
+      icon="tag"
+      hint={`${campaigns.length} campañas`}
+    />
   </section>
 
+  <!-- 6.1 Cupones -->
   <section class="admin-card mt-5">
     <div class="admin-card-head">
       <div>
         <h2 class="admin-card-title">Cupones y descuentos</h2>
         <p class="mt-0.5 text-[0.7rem] text-ink/45">
-          Los códigos se validan al finalizar la compra. Un uso por pedido.
+          Códigos que se validan al finalizar la compra. Un uso por pedido y límites por cliente.
         </p>
       </div>
       <span class="admin-badge" data-tone="jade">{active} activos</span>
@@ -65,8 +135,9 @@ const valueLabel = (promo: (typeof promos)[number]) => {
             <th>Tipo</th>
             <th class="num">Valor</th>
             <th class="num">Mínimo</th>
+            <th>Inicio</th>
+            <th>Vence</th>
             <th class="num">Usos</th>
-            <th>Vigencia</th>
             <th>Estado</th>
             <th class="text-right">Acciones</th>
           </tr>
@@ -84,10 +155,18 @@ const valueLabel = (promo: (typeof promos)[number]) => {
                 <td class="text-ink/55" data-promo-type>{PROMO_TYPES[promo.type] ?? promo.type}</td>
                 <td class="num font-medium text-jade-900" data-promo-value>{valueLabel(promo)}</td>
                 <td class="num text-ink/50" data-promo-min>{promo.minTotal ? formatCOP(promo.minTotal) : '—'}</td>
+                <td class="whitespace-nowrap text-ink/55" data-promo-starts>
+                  {promo.startsAt ? formatDate(promo.startsAt) : '—'}
+                </td>
+                <td class="whitespace-nowrap text-ink/55" data-promo-ends>
+                  {promo.endsAt ? formatDate(promo.endsAt) : 'Sin vencimiento'}
+                </td>
                 <td class="num text-ink/60" data-promo-uses>
                   {promo.uses}{promo.maxUses ? ` / ${promo.maxUses}` : ''}
+                  <span class="block text-[0.62rem] text-ink/40">
+                    {promo.maxUsesPerCustomer ? `${promo.maxUsesPerCustomer} por cliente` : 'Ilimitado por cliente'}
+                  </span>
                 </td>
-                <td class="whitespace-nowrap text-ink/55" data-promo-ends>{promo.endsAt ? formatDate(promo.endsAt) : 'Sin vencimiento'}</td>
                 <td>
                   <div class="flex items-center gap-2">
                     <button
@@ -103,6 +182,9 @@ const valueLabel = (promo: (typeof promos)[number]) => {
                 </td>
                 <td>
                   <div class="flex items-center justify-end gap-1">
+                    <button type="button" class="admin-icon-btn" data-history-promo={promo.id} title="Historial de utilización" aria-label={`Historial de ${promo.code}`}>
+                      <AdminIcon name="clock" size={15} />
+                    </button>
                     <button type="button" class="admin-icon-btn" data-edit-promo={promo.id} title="Editar" aria-label={`Editar ${promo.code}`}>
                       <AdminIcon name="edit" size={15} />
                     </button>
@@ -125,7 +207,80 @@ const valueLabel = (promo: (typeof promos)[number]) => {
     </div>
   </section>
 
+  <!-- 6.2 Descuentos especiales (resumen de la herramienta independiente) -->
+  <section class="admin-card mt-5">
+    <div class="admin-card-head">
+      <div class="flex items-center gap-2.5">
+        <span class="grid h-8 w-8 place-items-center rounded-xs bg-jade-50 text-jade-800">
+          <AdminIcon name="calendar" size={16} />
+        </span>
+        <div>
+          <h2 class="admin-card-title">Descuentos especiales</h2>
+          <p class="text-[0.68rem] text-ink/45">
+            Campañas automáticas sin código. Créalas y prográmalas en la herramienta independiente.
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="admin-badge" data-tone="terracotta">{specialActive} activas</span>
+        <a href="/admin/descuentos" class="admin-btn admin-btn-outline admin-btn-sm">
+          <AdminIcon name="arrowRight" size={14} />
+          Gestionar campañas
+        </a>
+      </div>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Campaña</th>
+            <th>Aplicación</th>
+            <th>Descuento</th>
+            <th>Vigencia</th>
+            <th class="num">Usos</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            campaigns.map((campaign) => {
+              const status = resolveCampaignStatus(campaign, now);
+              return (
+                <tr>
+                  <td class="font-medium text-ink/75">{campaign.name}</td>
+                  <td class="text-ink/55">
+                    {applicationLabels[campaign.application] ?? campaign.application}
+                    <span class="block text-[0.62rem] text-ink/40">{campaignTargets(campaign)}</span>
+                  </td>
+                  <td class="font-medium text-jade-900">{campaignValueLabel(campaign)}</td>
+                  <td class="whitespace-nowrap text-ink/55">
+                    {formatDateTime(campaign.startsAt)} — {formatDateTime(campaign.endsAt)}
+                  </td>
+                  <td class="num text-ink/60">
+                    {campaign.uses}{campaign.usageLimit ? ` / ${campaign.usageLimit}` : ''}
+                  </td>
+                  <td>
+                    <span class="admin-badge" data-tone={CAMPAIGN_STATUS_TONES[status]}>
+                      {CAMPAIGN_STATUS_LABELS[status]}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+      {campaigns.length === 0 && (
+        <p class="px-5 py-6 text-center text-[0.75rem] text-ink/45">
+          Aún no hay campañas. Crea una en la herramienta de descuentos automáticos.
+        </p>
+      )}
+    </div>
+  </section>
+
   <div class="mt-5 grid gap-5 lg:grid-cols-2">
+    <!-- 6.3 Cumpleaños -->
     <section class="admin-card">
       <div class="admin-card-head">
         <div class="flex items-center gap-2.5">
@@ -134,37 +289,140 @@ const valueLabel = (promo: (typeof promos)[number]) => {
           </span>
           <div>
             <h2 class="admin-card-title">Cumpleaños</h2>
-            <p class="text-[0.68rem] text-ink/45">Saludo automático con descuento</p>
+            <p class="text-[0.68rem] text-ink/45">
+              Descuento automático del {loyalty.birthdayPercent}% para clientes registrados
+            </p>
           </div>
         </div>
-        <button type="button" class="admin-switch is-on" data-generic-switch role="switch" aria-checked="true" aria-label="Activar promoción de cumpleaños"></button>
+        <button
+          type="button"
+          id="birthday-enabled"
+          class="admin-switch is-on"
+          data-generic-switch
+          role="switch"
+          aria-checked="true"
+          aria-label="Activar promoción de cumpleaños"
+        ></button>
       </div>
 
       <div class="grid gap-4 p-5 sm:grid-cols-2">
         <div>
           <label class="admin-label" for="birthday-discount">Descuento</label>
           <div class="relative">
-            <input id="birthday-discount" type="number" min="0" max="50" value="15" class="admin-input pr-8" />
+            <input id="birthday-discount" type="number" min="0" max="50" value={loyalty.birthdayPercent} class="admin-input pr-8" />
             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[0.72rem] text-ink/40">%</span>
           </div>
         </div>
         <div>
-          <label class="admin-label" for="birthday-days">Días de anticipación</label>
-          <input id="birthday-days" type="number" min="0" max="30" value="3" class="admin-input" />
+          <label class="admin-label" for="birthday-validity">Vigencia del beneficio (días)</label>
+          <input id="birthday-validity" type="number" min="0" max="60" value={loyalty.birthdayValidityDays} class="admin-input" />
+          <p class="admin-hint">Desde la fecha de cumpleaños.</p>
+        </div>
+        <div>
+          <label class="admin-label" for="birthday-days">Aviso previo (días)</label>
+          <input id="birthday-days" type="number" min="0" max="30" value={loyalty.birthdayDays} class="admin-input" />
+        </div>
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-[0.75rem] text-ink/60">
+            <input id="birthday-registered" type="checkbox" checked={loyalty.birthdayOnlyRegistered} class="h-3.5 w-3.5 accent-jade-900" />
+            Solo clientes registrados
+          </label>
+          <label class="flex items-center gap-2 text-[0.75rem] text-ink/60">
+            <input id="birthday-once" type="checkbox" checked={loyalty.birthdayOncePerYear} class="h-3.5 w-3.5 accent-jade-900" />
+            Un solo uso por cumpleaños
+          </label>
+          <label class="flex items-center gap-2 text-[0.75rem] text-ink/60">
+            <input id="birthday-email" type="checkbox" checked={loyalty.birthdayEmail} class="h-3.5 w-3.5 accent-jade-900" />
+            Enviar notificación por correo
+          </label>
         </div>
         <div class="sm:col-span-2">
           <label class="admin-label" for="birthday-message">Mensaje del correo</label>
-          <textarea id="birthday-message" rows="2" class="admin-textarea">Feliz vuelta al sol. Te dejamos un 15% para que enciendas algo especial este mes.</textarea>
+          <textarea id="birthday-message" rows="2" class="admin-textarea">Feliz vuelta al sol. Te dejamos un {loyalty.birthdayPercent}% para que enciendas algo especial este mes.</textarea>
         </div>
+
+        <div class="sm:col-span-2 rounded-xs border border-cream-300 bg-cream-50 p-3">
+          <p class="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-jade-900/60">Beneficio que ve el cliente</p>
+          <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-[0.82rem] font-medium text-jade-900">Tu regalo de cumpleaños</p>
+              <p class="mt-0.5 text-[0.68rem] text-ink/55">
+                <span data-birthday-preview-percent>{loyalty.birthdayPercent}</span>% de descuento · válido
+                <span data-birthday-preview-validity>{loyalty.birthdayValidityDays}</span> días · un uso por cumpleaños
+              </p>
+            </div>
+            <span class="rounded-xs border border-dashed border-jade-900/25 bg-cream-100/60 px-2 py-1 font-mono text-[0.72rem] text-jade-900">CUMPLE15</span>
+          </div>
+        </div>
+
         <div class="sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
           <p class="text-[0.66rem] text-ink/40">
-            3 cumpleaños este mes · código <span class="font-medium text-jade-900">CUMPLE15</span>
+            {birthdayCustomers.length} cumpleaños en {new Intl.DateTimeFormat('es-CO', { month: 'long' }).format(now)} · código CUMPLE15
           </p>
-          <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-save-birthday>Guardar</button>
+          <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-save-birthday>Guardar configuración</button>
+        </div>
+      </div>
+
+      <div class="border-t border-cream-300 px-5 pb-5 pt-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="font-display text-base text-jade-900">Cumpleaños del mes</h3>
+            <p class="text-[0.68rem] text-ink/45">Consulta, avisa y registra el uso sin permitir beneficios repetidos.</p>
+          </div>
+          <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-birthday-notify-all>
+            <AdminIcon name="mail" size={14} />
+            Enviar avisos
+          </button>
+        </div>
+        <div class="admin-table-wrap mt-3">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Cumpleaños</th>
+                <th>Beneficio</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="birthday-rows">
+              {
+                birthdayCustomers.map((customer) => (
+                  <tr
+                    data-birthday-row
+                    data-customer-id={customer.id}
+                    data-name={customer.name}
+                    data-email={customer.email}
+                    data-birth-date={customer.birthday}
+                  >
+                    <td>
+                      <span class="text-ink/75">{customer.name}</span>
+                      <span class="block text-[0.62rem] text-ink/40">{customer.email}</span>
+                    </td>
+                    <td class="whitespace-nowrap text-ink/55">{formatDate(customer.birthday)}</td>
+                    <td data-birthday-status><span class="admin-badge" data-tone="slate">Consultando…</span></td>
+                    <td>
+                      <div class="flex items-center justify-end gap-1">
+                        <button type="button" class="admin-icon-btn" data-birthday-notify={customer.id} title="Enviar correo" aria-label={`Enviar correo a ${customer.name}`}>
+                          <AdminIcon name="mail" size={15} />
+                        </button>
+                        <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-birthday-use={customer.id}>
+                          Registrar uso
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+          {birthdayCustomers.length === 0 && (
+            <p class="px-5 py-6 text-center text-[0.75rem] text-ink/45">No hay cumpleaños este mes.</p>
+          )}
         </div>
       </div>
     </section>
 
+    <!-- 6.4 Puntos Iris -->
     <section class="admin-card">
       <div class="admin-card-head">
         <div class="flex items-center gap-2.5">
@@ -173,7 +431,7 @@ const valueLabel = (promo: (typeof promos)[number]) => {
           </span>
           <div>
             <h2 class="admin-card-title">Puntos Iris</h2>
-            <p class="text-[0.68rem] text-ink/45">Fidelización por compra</p>
+            <p class="text-[0.68rem] text-ink/45">Acumulación, vencimiento, consulta y canje</p>
           </div>
         </div>
         <button type="button" class="admin-switch is-on" data-generic-switch role="switch" aria-checked="true" aria-label="Activar programa de puntos"></button>
@@ -181,20 +439,45 @@ const valueLabel = (promo: (typeof promos)[number]) => {
 
       <div class="grid gap-4 p-5 sm:grid-cols-2">
         <div>
-          <label class="admin-label" for="points-rate">Puntos por cada $1.000</label>
-          <input id="points-rate" type="number" min="0" value="1" class="admin-input" />
+          <label class="admin-label" for="points-rate">Acumulación por cada $1.000</label>
+          <input id="points-rate" type="number" min="0" value={loyalty.pointsPer1000} class="admin-input" />
+          <p class="admin-hint">Puntos que gana el cliente por cada mil pesos en pedidos aprobados.</p>
         </div>
         <div>
           <label class="admin-label" for="points-value">Valor de cada punto</label>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[0.72rem] text-ink/40">$</span>
-            <input id="points-value" type="number" min="0" step="10" value="100" class="admin-input pl-6" />
+            <input id="points-value" type="number" min="0" step="10" value={loyalty.pointValueCop} class="admin-input pl-6" />
           </div>
         </div>
-        <div class="sm:col-span-2">
-          <label class="admin-label" for="points-min">Canje mínimo</label>
-          <input id="points-min" type="number" min="0" value="500" class="admin-input" />
+        <div>
+          <label class="admin-label" for="points-expire">Vencimiento (meses)</label>
+          <input id="points-expire" type="number" min="0" value={loyalty.expireMonths} class="admin-input" />
+          <p class="admin-hint">0 = los puntos no vencen.</p>
         </div>
+        <div>
+          <label class="admin-label" for="points-min">Canje mínimo</label>
+          <input id="points-min" type="number" min="0" value={loyalty.minRedeem} class="admin-input" />
+          <p class="admin-hint">Saldo mínimo para poder canjear.</p>
+        </div>
+
+        <div class="sm:col-span-2 border-t border-cream-300 pt-4">
+          <label class="admin-label" for="points-query">Consulta de saldo</label>
+          <div class="flex gap-2">
+            <input id="points-query" type="search" class="admin-input" placeholder="Nombre o correo del cliente" list="points-customers" />
+            <datalist id="points-customers">
+              {customers.map((customer) => <option value={customer.email}>{customer.name}</option>)}
+            </datalist>
+            <button type="button" class="admin-btn admin-btn-outline admin-btn-sm shrink-0" data-query-points>
+              <AdminIcon name="search" size={14} />
+              Consultar
+            </button>
+          </div>
+          <div id="points-result" class="mt-2 min-h-[2.5rem] rounded-xs bg-cream-100/60 px-3 py-2 text-[0.72rem] text-ink/55">
+            Escribe un cliente para ver su saldo y su valor de canje.
+          </div>
+        </div>
+
         <div class="sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
           <p class="text-[0.66rem] text-ink/40">Saldo total: {points.toLocaleString('es-CO')} puntos</p>
           <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" data-save-points>Guardar</button>
@@ -211,8 +494,10 @@ const valueLabel = (promo: (typeof promos)[number]) => {
       <div class="flex-1">
         <h2 class="font-display text-base text-jade-900">Cómo se aplican los descuentos</h2>
         <p class="mt-1 text-[0.73rem] leading-relaxed text-ink/55">
-          El descuento se resta del subtotal antes del envío. Los cupones de cumpleaños y puntos no
-          son acumulables entre sí. Los envíos gratis se aplican cuando el pedido supera el mínimo.
+          Los descuentos especiales se aplican solos según temporada, colección, producto o tienda completa;
+          los cupones se validan con su código al finalizar la compra. El descuento se resta del subtotal antes
+          del envío. Los beneficios de cumpleaños y puntos no son acumulables entre sí. Los envíos gratis se
+          aplican cuando el pedido supera el mínimo.
         </p>
       </div>
       <a href="/legales#terminos" target="_blank" class="admin-btn admin-btn-outline admin-btn-sm">
@@ -226,7 +511,7 @@ const valueLabel = (promo: (typeof promos)[number]) => {
     <form id="promo-form" class="admin-modal-panel">
       <div class="admin-modal-head">
         <div>
-          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Promociones</p>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Promociones · Cupones</p>
           <h2 id="promo-modal-title" class="admin-card-title mt-1">Nuevo cupón</h2>
         </div>
         <button type="button" class="admin-icon-btn" data-close-modal="promo-modal" aria-label="Cerrar">
@@ -236,18 +521,19 @@ const valueLabel = (promo: (typeof promos)[number]) => {
 
       <div class="admin-modal-body grid gap-4 sm:grid-cols-2">
         <div class="sm:col-span-2">
-          <label class="admin-label" for="promo-name">Nombre interno</label>
+          <label class="admin-label" for="promo-name">Nombre</label>
           <input id="promo-name" data-field="name" required class="admin-input" placeholder="Especial de otoño" />
         </div>
         <div>
-          <label class="admin-label" for="promo-code">Código</label>
+          <label class="admin-label" for="promo-code">Código del cupón</label>
           <input id="promo-code" data-field="code" required class="admin-input font-mono uppercase" placeholder="OTONO15" />
         </div>
         <div>
-          <label class="admin-label" for="promo-type">Tipo</label>
+          <label class="admin-label" for="promo-type">Tipo de descuento</label>
           <select id="promo-type" data-field="type" class="admin-select">
             {Object.entries(PROMO_TYPES).map(([value, label]) => <option value={value}>{label}</option>)}
           </select>
+          <p class="admin-hint">Para cupones usa porcentaje o valor fijo.</p>
         </div>
         <div>
           <label class="admin-label" for="promo-value">Valor</label>
@@ -255,16 +541,24 @@ const valueLabel = (promo: (typeof promos)[number]) => {
           <p class="admin-hint">Porcentaje o monto en COP según el tipo.</p>
         </div>
         <div>
-          <label class="admin-label" for="promo-min">Compra mínima</label>
+          <label class="admin-label" for="promo-min">Compra mínima (COP)</label>
           <input id="promo-min" data-field="min" type="number" min="0" step="1000" class="admin-input" placeholder="0" />
         </div>
         <div>
-          <label class="admin-label" for="promo-max">Usos máximos</label>
+          <label class="admin-label" for="promo-starts">Fecha de inicio</label>
+          <input id="promo-starts" data-field="starts" type="date" class="admin-input" />
+        </div>
+        <div>
+          <label class="admin-label" for="promo-ends">Fecha de vencimiento</label>
+          <input id="promo-ends" data-field="ends" type="date" class="admin-input" />
+        </div>
+        <div>
+          <label class="admin-label" for="promo-max">Cantidad máxima de usos</label>
           <input id="promo-max" data-field="max" type="number" min="1" class="admin-input" placeholder="Sin límite" />
         </div>
         <div>
-          <label class="admin-label" for="promo-ends">Vence el</label>
-          <input id="promo-ends" data-field="ends" type="date" class="admin-input" />
+          <label class="admin-label" for="promo-max-customer">Usos por cliente</label>
+          <input id="promo-max-customer" data-field="maxCustomer" type="number" min="1" class="admin-input" placeholder="Sin límite" />
         </div>
         <label class="flex items-center gap-2 text-[0.75rem] text-ink/60 sm:col-span-2">
           <input type="checkbox" data-field="active" checked class="h-3.5 w-3.5 accent-jade-900" />
@@ -278,13 +572,38 @@ const valueLabel = (promo: (typeof promos)[number]) => {
       </div>
     </form>
   </div>
+
+  <!-- Modal historial de utilización -->
+  <div id="history-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+    <div class="admin-modal-panel">
+      <div class="admin-modal-head">
+        <div>
+          <p class="text-[0.58rem] uppercase tracking-[0.18em] text-terracotta-700">Promociones · Cupones</p>
+          <h2 id="history-modal-title" class="admin-card-title mt-1">Historial de utilización</h2>
+        </div>
+        <button type="button" class="admin-icon-btn" data-close-modal="history-modal" aria-label="Cerrar">
+          <AdminIcon name="close" size={18} />
+        </button>
+      </div>
+      <div id="history-body" class="admin-modal-body"></div>
+      <div class="admin-modal-foot">
+        <button type="button" class="admin-btn admin-btn-ghost" data-close-modal="history-modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
 </AdminLayout>
 
 <script type="application/json" id="promos-data" set:html={JSON.stringify(promos)}></script>
+<script type="application/json" id="points-customers-data" set:html={JSON.stringify(customers.map((customer) => ({ name: customer.name, email: customer.email, points: customer.points })))}></script>
+<script type="application/json" id="birthday-customers-data" set:html={JSON.stringify(birthdayCustomers.map((customer) => ({ id: customer.id, name: customer.name, email: customer.email, birthDate: customer.birthday })))}></script>
+<script type="application/json" id="birthday-rules-data" set:html={JSON.stringify(loyalty)}></script>
 
 <script>
-  import { formatCOP, formatDate, PROMO_TYPES } from '../../lib/admin';
+  import { formatCOP, formatDate, formatDateTime, PROMO_TYPES } from '../../lib/admin';
+  import { checkBirthdayBenefit, type BirthdayRules } from '../../lib/promotions';
 
+  type PromoUsage = { id: string; date: string; customer: string; order: string; discount: number };
   type Promo = {
     id: string;
     name: string;
@@ -292,13 +611,25 @@ const valueLabel = (promo: (typeof promos)[number]) => {
     type: string;
     value: number;
     minTotal: number;
+    startsAt: string | null;
+    endsAt: string | null;
     uses: number;
     maxUses: number | null;
-    endsAt: string | null;
+    maxUsesPerCustomer: number | null;
+    usageHistory: PromoUsage[];
     active: boolean;
   };
+  type PointsCustomer = { name: string; email: string; points: number };
+  type BirthdayCustomer = { id: string; name: string; email: string; birthDate: string };
+  type BirthdayRedemption = { usedYears: number[]; notifiedYears: number[] };
 
-  const promos: Promo[] = JSON.parse(document.getElementById('promos-data')?.textContent ?? '[]');
+  const readJson = <T,>(id: string): T =>
+    JSON.parse(document.getElementById(id)?.textContent ?? '[]') as T;
+
+  const promos = readJson<Promo[]>('promos-data');
+  const pointsCustomers = readJson<PointsCustomer[]>('points-customers-data');
+  const birthdayCustomers = readJson<BirthdayCustomer[]>('birthday-customers-data');
+
   const byId = new Map(promos.map((promo) => [promo.id, promo]));
   const tbody = document.getElementById('promos-body');
   const form = document.getElementById('promo-form') as HTMLFormElement | null;
@@ -306,34 +637,52 @@ const valueLabel = (promo: (typeof promos)[number]) => {
   const saveButton = document.querySelector<HTMLButtonElement>('[data-save-promo]');
   let editingId: string | null = null;
 
+  const escapeHtml = (value: unknown): string =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
   const valueLabel = (promo: Promo): string => {
     if (promo.type === 'percent' || promo.type === 'birthday') return `${promo.value}%`;
     if (promo.type === 'points') return `${promo.value} pts`;
     return formatCOP(promo.value);
   };
 
+  const usesLabel = (promo: Promo): string =>
+    `${promo.uses}${promo.maxUses ? ` / ${promo.maxUses}` : ''}`;
+
+  const perCustomerLabel = (promo: Promo): string =>
+    promo.maxUsesPerCustomer ? `${promo.maxUsesPerCustomer} por cliente` : 'Ilimitado por cliente';
+
   function rowHtml(promo: Promo): string {
     return `
-      <tr data-promo-row="${promo.id}">
-        <td><span class="rounded-xs border border-dashed border-jade-900/25 bg-cream-100/60 px-2 py-1 font-mono text-[0.7rem] font-medium tracking-wide text-jade-900">${promo.code}</span></td>
-        <td class="text-ink/70" data-promo-name>${promo.name}</td>
-        <td class="text-ink/55" data-promo-type>${PROMO_TYPES[promo.type] ?? promo.type}</td>
+      <tr data-promo-row="${escapeHtml(promo.id)}">
+        <td><span class="rounded-xs border border-dashed border-jade-900/25 bg-cream-100/60 px-2 py-1 font-mono text-[0.7rem] font-medium tracking-wide text-jade-900">${escapeHtml(promo.code)}</span></td>
+        <td class="text-ink/70" data-promo-name>${escapeHtml(promo.name)}</td>
+        <td class="text-ink/55" data-promo-type>${escapeHtml(PROMO_TYPES[promo.type] ?? promo.type)}</td>
         <td class="num font-medium text-jade-900" data-promo-value>${valueLabel(promo)}</td>
         <td class="num text-ink/50" data-promo-min>${promo.minTotal ? formatCOP(promo.minTotal) : '—'}</td>
-        <td class="num text-ink/60" data-promo-uses>${promo.uses}${promo.maxUses ? ` / ${promo.maxUses}` : ''}</td>
+        <td class="whitespace-nowrap text-ink/55" data-promo-starts>${promo.startsAt ? formatDate(promo.startsAt) : '—'}</td>
         <td class="whitespace-nowrap text-ink/55" data-promo-ends>${promo.endsAt ? formatDate(promo.endsAt) : 'Sin vencimiento'}</td>
+        <td class="num text-ink/60" data-promo-uses>${usesLabel(promo)}<span class="block text-[0.62rem] text-ink/40">${perCustomerLabel(promo)}</span></td>
         <td>
           <div class="flex items-center gap-2">
-            <button type="button" class="admin-switch ${promo.active ? 'is-on' : ''}" data-toggle-promo="${promo.id}" role="switch" aria-checked="${promo.active}" aria-label="Activar o desactivar ${promo.code}"></button>
+            <button type="button" class="admin-switch ${promo.active ? 'is-on' : ''}" data-toggle-promo="${escapeHtml(promo.id)}" role="switch" aria-checked="${promo.active}" aria-label="Activar o desactivar ${escapeHtml(promo.code)}"></button>
             <span class="text-[0.68rem] text-ink/45" data-promo-status>${promo.active ? 'Activo' : 'Pausado'}</span>
           </div>
         </td>
         <td>
           <div class="flex items-center justify-end gap-1">
-            <button type="button" class="admin-icon-btn" data-edit-promo="${promo.id}" title="Editar" aria-label="Editar ${promo.code}">
+            <button type="button" class="admin-icon-btn" data-history-promo="${escapeHtml(promo.id)}" title="Historial de utilización" aria-label="Historial de ${escapeHtml(promo.code)}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </button>
+            <button type="button" class="admin-icon-btn" data-edit-promo="${escapeHtml(promo.id)}" title="Editar" aria-label="Editar ${escapeHtml(promo.code)}">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
             </button>
-            <button type="button" class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700" data-delete-promo="${promo.id}" title="Eliminar" aria-label="Eliminar ${promo.code}">
+            <button type="button" class="admin-icon-btn hover:bg-rose-50 hover:text-rose-700" data-delete-promo="${escapeHtml(promo.id)}" title="Eliminar" aria-label="Eliminar ${escapeHtml(promo.code)}">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
@@ -341,8 +690,8 @@ const valueLabel = (promo: (typeof promos)[number]) => {
       </tr>`;
   }
 
-  function field(name: string): HTMLInputElement | HTMLSelectElement | null {
-    return form?.querySelector(`[data-field="${name}"]`) as HTMLInputElement | null;
+  function field(name: string, source: ParentNode | null = form): HTMLInputElement | HTMLSelectElement | null {
+    return source?.querySelector(`[data-field="${name}"]`) as HTMLInputElement | HTMLSelectElement | null;
   }
 
   function openModal(promo?: Promo) {
@@ -357,8 +706,10 @@ const valueLabel = (promo: (typeof promos)[number]) => {
       type: promo?.type ?? 'percent',
       value: String(promo?.value ?? 10),
       min: String(promo?.minTotal ?? 0),
-      max: promo?.maxUses ? String(promo.maxUses) : '',
+      starts: promo?.startsAt ?? '',
       ends: promo?.endsAt ?? '',
+      max: promo?.maxUses ? String(promo.maxUses) : '',
+      maxCustomer: promo?.maxUsesPerCustomer ? String(promo.maxUsesPerCustomer) : '',
     };
 
     Object.entries(values).forEach(([key, value]) => {
@@ -370,6 +721,40 @@ const valueLabel = (promo: (typeof promos)[number]) => {
     if (active) (active as HTMLInputElement).checked = promo?.active ?? true;
 
     (window as any).openAdminModal('promo-modal');
+  }
+
+  function openHistory(promo: Promo) {
+    const body = document.getElementById('history-body');
+    const title = document.getElementById('history-modal-title');
+    if (!body) return;
+    if (title) title.textContent = `Historial de ${promo.code}`;
+
+    const rows = promo.usageHistory ?? [];
+    body.innerHTML = `
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-[0.72rem] text-ink/55">
+        <span>${escapeHtml(promo.name)} · ${usesLabel(promo)} usos</span>
+        <span class="admin-badge" data-tone="jade">${rows.length} registros</span>
+      </div>
+      ${
+        rows.length === 0
+          ? '<p class="py-6 text-center text-[0.75rem] text-ink/45">Este cupón todavía no tiene usos registrados.</p>'
+          : `<div class="admin-table-wrap"><table class="admin-table">
+              <thead><tr><th>Fecha</th><th>Cliente</th><th>Pedido</th><th class="num">Descuento</th></tr></thead>
+              <tbody>
+                ${rows
+                  .map(
+                    (usage) => `<tr>
+                      <td class="whitespace-nowrap text-ink/55">${formatDateTime(usage.date)}</td>
+                      <td class="text-ink/70">${escapeHtml(usage.customer)}</td>
+                      <td class="font-mono text-[0.7rem] text-ink/55">${escapeHtml(usage.order)}</td>
+                      <td class="num font-medium text-jade-900">${formatCOP(usage.discount)}</td>
+                    </tr>`,
+                  )
+                  .join('')}
+              </tbody>
+            </table></div>`
+      }`;
+    (window as any).openAdminModal('history-modal');
   }
 
   tbody?.addEventListener('click', (event) => {
@@ -385,6 +770,13 @@ const valueLabel = (promo: (typeof promos)[number]) => {
       const label = toggle.parentElement?.querySelector<HTMLElement>('[data-promo-status]');
       if (label) label.textContent = promo.active ? 'Activo' : 'Pausado';
       (window as any).adminToast(`Cupón ${promo.code} ${promo.active ? 'activado' : 'pausado'} (demo).`);
+      return;
+    }
+
+    const history = target.closest<HTMLButtonElement>('[data-history-promo]');
+    if (history) {
+      const promo = byId.get(history.dataset.historyPromo ?? '');
+      if (promo) openHistory(promo);
       return;
     }
 
@@ -410,13 +802,6 @@ const valueLabel = (promo: (typeof promos)[number]) => {
 
   document.querySelector('[data-new-promo]')?.addEventListener('click', () => openModal());
 
-  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const id = button.dataset.closeModal;
-      if (id) (window as any).closeAdminModal(id);
-    });
-  });
-
   form?.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
@@ -432,9 +817,12 @@ const valueLabel = (promo: (typeof promos)[number]) => {
       type: field('type')?.value ?? 'percent',
       value: Number(field('value')?.value ?? 0),
       minTotal: Number(field('min')?.value ?? 0),
+      startsAt: field('starts')?.value || null,
+      endsAt: field('ends')?.value || null,
       uses: editingId ? byId.get(editingId)?.uses ?? 0 : 0,
       maxUses: field('max')?.value ? Number(field('max')?.value) : null,
-      endsAt: field('ends')?.value || null,
+      maxUsesPerCustomer: field('maxCustomer')?.value ? Number(field('maxCustomer')?.value) : null,
+      usageHistory: editingId ? byId.get(editingId)?.usageHistory ?? [] : [],
       active: (field('active') as HTMLInputElement | null)?.checked ?? true,
     };
 
@@ -456,6 +844,182 @@ const valueLabel = (promo: (typeof promos)[number]) => {
     (window as any).closeAdminModal('promo-modal');
   });
 
+  /* -------------------------------- Cumpleaños -------------------------------- */
+
+  const birthdaysBody = document.getElementById('birthday-rows');
+  const redemptions = new Map<string, BirthdayRedemption>();
+
+  const numberInput = (id: string, fallback: number): number => {
+    const parsed = Number((document.getElementById(id) as HTMLInputElement | null)?.value ?? fallback);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const checkedInput = (id: string, fallback: boolean): boolean =>
+    (document.getElementById(id) as HTMLInputElement | null)?.checked ?? fallback;
+
+  function readBirthdayRules(): BirthdayRules {
+    return {
+      enabled: document.getElementById('birthday-enabled')?.classList.contains('is-on') ?? true,
+      percent: numberInput('birthday-discount', 15),
+      notifyDaysBefore: numberInput('birthday-days', 3),
+      validityDays: numberInput('birthday-validity', 7),
+      registeredOnly: checkedInput('birthday-registered', true),
+      oncePerBirthday: checkedInput('birthday-once', true),
+      emailEnabled: checkedInput('birthday-email', true),
+    };
+  }
+
+  function birthdayState(customer: BirthdayCustomer, rules: BirthdayRules) {
+    const year = new Date().getFullYear();
+    const redemption = redemptions.get(customer.id) ?? { usedYears: [], notifiedYears: [] };
+    const result = checkBirthdayBenefit(customer, rules, redemption);
+    if (redemption.usedYears.includes(year)) {
+      return { tone: 'jade', label: 'Usado', canUse: false, reason: 'Ya registraste el uso de este cumpleaños.' };
+    }
+    if (!result.ok) {
+      return {
+        tone: result.inWindow ? 'amber' : 'slate',
+        label: result.inWindow ? 'No disponible' : 'Fuera de vigencia',
+        canUse: false,
+        reason: result.reason,
+      };
+    }
+    if (redemption.notifiedYears.includes(year)) {
+      return { tone: 'blue', label: 'Aviso enviado', canUse: true, reason: result.reason };
+    }
+    return { tone: 'jade', label: 'Disponible', canUse: true, reason: result.reason };
+  }
+
+  function renderBirthdays() {
+    const rules = readBirthdayRules();
+    const percentEl = document.querySelector('[data-birthday-preview-percent]');
+    const validityEl = document.querySelector('[data-birthday-preview-validity]');
+    if (percentEl) percentEl.textContent = String(rules.percent);
+    if (validityEl) validityEl.textContent = String(rules.validityDays);
+
+    birthdaysBody?.querySelectorAll<HTMLTableRowElement>('[data-birthday-row]').forEach((row) => {
+      const customer = birthdayCustomers.find((item) => item.id === row.dataset.customerId);
+      if (!customer) return;
+      const state = birthdayState(customer, rules);
+      const badge = row.querySelector<HTMLElement>('[data-birthday-status]');
+      if (badge) badge.innerHTML = `<span class="admin-badge" data-tone="${state.tone}">${state.label}</span>`;
+      const useButton = row.querySelector<HTMLButtonElement>('[data-birthday-use]');
+      if (useButton) {
+        useButton.disabled = !state.canUse;
+        useButton.classList.toggle('opacity-40', !state.canUse);
+        useButton.title = state.reason;
+      }
+      const notifyButton = row.querySelector<HTMLButtonElement>('[data-birthday-notify]');
+      if (notifyButton) notifyButton.disabled = !rules.enabled || !rules.emailEnabled || !customer.email;
+    });
+  }
+
+  function markNotified(id: string) {
+    const customer = birthdayCustomers.find((item) => item.id === id);
+    if (!customer) return;
+    const rules = readBirthdayRules();
+    if (!rules.emailEnabled) {
+      (window as any).adminToast('Activa las notificaciones por correo primero.', 'warn');
+      return;
+    }
+    if (!customer.email) {
+      (window as any).adminToast(`${customer.name} no tiene correo registrado.`, 'warn');
+      return;
+    }
+    const year = new Date().getFullYear();
+    const redemption = redemptions.get(id) ?? { usedYears: [], notifiedYears: [] };
+    if (!redemption.notifiedYears.includes(year)) redemption.notifiedYears.push(year);
+    redemptions.set(id, redemption);
+    renderBirthdays();
+    (window as any).adminToast(`Aviso de cumpleaños enviado a ${customer.name} (demo).`);
+  }
+
+  function markUsed(id: string) {
+    const customer = birthdayCustomers.find((item) => item.id === id);
+    if (!customer) return;
+    const rules = readBirthdayRules();
+    const redemption = redemptions.get(id) ?? { usedYears: [], notifiedYears: [] };
+    const result = checkBirthdayBenefit(customer, rules, redemption);
+    if (!result.ok) {
+      (window as any).adminToast(result.reason, 'warn');
+      return;
+    }
+    redemption.usedYears.push(new Date().getFullYear());
+    redemptions.set(id, redemption);
+    renderBirthdays();
+    (window as any).adminToast(`Uso de cumpleaños registrado para ${customer.name} (demo).`);
+  }
+
+  birthdaysBody?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const notify = target.closest<HTMLButtonElement>('[data-birthday-notify]');
+    if (notify) {
+      markNotified(notify.dataset.birthdayNotify ?? '');
+      return;
+    }
+    const use = target.closest<HTMLButtonElement>('[data-birthday-use]');
+    if (use) markUsed(use.dataset.birthdayUse ?? '');
+  });
+
+  document.querySelector('[data-birthday-notify-all]')?.addEventListener('click', () => {
+    const rules = readBirthdayRules();
+    if (!rules.emailEnabled) {
+      (window as any).adminToast('Activa las notificaciones por correo primero.', 'warn');
+      return;
+    }
+    let sent = 0;
+    birthdayCustomers.forEach((customer) => {
+      if (!customer.email) return;
+      const year = new Date().getFullYear();
+      const redemption = redemptions.get(customer.id) ?? { usedYears: [], notifiedYears: [] };
+      if (!redemption.notifiedYears.includes(year)) redemption.notifiedYears.push(year);
+      redemptions.set(customer.id, redemption);
+      sent += 1;
+    });
+    renderBirthdays();
+    (window as any).adminToast(`${sent} avisos de cumpleaños enviados (demo).`);
+  });
+
+  ['birthday-discount', 'birthday-days', 'birthday-validity', 'birthday-registered', 'birthday-once', 'birthday-email'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', renderBirthdays);
+    document.getElementById(id)?.addEventListener('change', renderBirthdays);
+  });
+  document.getElementById('birthday-enabled')?.addEventListener('click', () => {
+    requestAnimationFrame(renderBirthdays);
+  });
+  renderBirthdays();
+
+  /* -------------------------- Consulta de puntos -------------------------- */
+
+  const pointsResult = document.getElementById('points-result');
+  document.querySelector('[data-query-points]')?.addEventListener('click', () => {
+    const query = (document.getElementById('points-query') as HTMLInputElement | null)?.value.trim().toLowerCase() ?? '';
+    if (!pointsResult) return;
+    if (!query) {
+      pointsResult.innerHTML = 'Escribe un nombre o correo para consultar el saldo.';
+      return;
+    }
+    const customer = pointsCustomers.find(
+      (item) => item.name.toLowerCase().includes(query) || item.email.toLowerCase().includes(query),
+    );
+    if (!customer) {
+      pointsResult.innerHTML = 'No se encontró ningún cliente con ese nombre o correo.';
+      return;
+    }
+    const rate = Number((document.getElementById('points-value') as HTMLInputElement | null)?.value ?? 0);
+    const min = Number((document.getElementById('points-min') as HTMLInputElement | null)?.value ?? 0);
+    pointsResult.innerHTML = `<span class="font-medium text-jade-900">${escapeHtml(customer.name)}</span>
+      · ${customer.points.toLocaleString('es-CO')} puntos
+      · valor de canje ${formatCOP(customer.points * rate)}
+      ${customer.points < min ? `<span class="text-terracotta-700"> · faltan ${(min - customer.points).toLocaleString('es-CO')} pts para canjear</span>` : '<span class="text-jade-700"> · puede canjear</span>'}`;
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-close-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.closeModal;
+      if (id) (window as any).closeAdminModal(id);
+    });
+  });
+
   document.querySelectorAll<HTMLElement>('[data-generic-switch]').forEach((button) => {
     button.addEventListener('click', () => {
       const on = button.classList.toggle('is-on');
@@ -465,7 +1029,11 @@ const valueLabel = (promo: (typeof promos)[number]) => {
   });
 
   document.querySelector('[data-save-birthday]')?.addEventListener('click', () => {
-    (window as any).adminToast('Configuración de cumpleaños guardada (demo).');
+    const rules = readBirthdayRules();
+    renderBirthdays();
+    (window as any).adminToast(
+      `Cumpleaños guardado: ${rules.percent}%, aviso ${rules.notifyDaysBefore} días antes, vigencia ${rules.validityDays} días (demo).`,
+    );
   });
 
   document.querySelector('[data-save-points]')?.addEventListener('click', () => {

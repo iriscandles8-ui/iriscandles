@@ -5,9 +5,11 @@ import type {
   DemoMonth,
   DemoMovement,
   DemoOrder,
+  DemoCampaign,
   DemoProduct,
   DemoPromo,
   DemoReview,
+  PromoUsage,
 } from '../data/admin-demo';
 
 export type AdminEventRequest = {
@@ -464,10 +466,27 @@ export async function getStatsRanges(supabase: SupabaseClient) {
 
 /* ---------------------------- Promociones ---------------------------- */
 
+const usageHistory = (value: unknown): PromoUsage[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const row = asRow(item);
+    return {
+      id: text(row.id) || `usage-${index}`,
+      date: text(row.date),
+      customer: text(row.customer),
+      order: text(row.order),
+      discount: num(row.discount),
+    };
+  });
+};
+
+const nullableNum = (value: unknown): number | null =>
+  value === undefined || value === null ? null : num(value);
+
 export async function getPromotions(supabase: SupabaseClient): Promise<DemoPromo[]> {
   const { data, error } = await supabase
     .from('promotions')
-    .select('id, name, type, value, code, min_total_cop, ends_at, is_active, metadata')
+    .select('id, name, type, value, code, min_total_cop, starts_at, ends_at, is_active, metadata')
     .order('created_at', { ascending: false });
 
   if (error || !data) return [];
@@ -487,12 +506,79 @@ export async function getPromotions(supabase: SupabaseClient): Promise<DemoPromo
           : 'percent',
       value: num(row.value),
       minTotal: num(row.min_total_cop),
-      uses: num(metadata.uses),
-      maxUses: metadata.max_uses === undefined || metadata.max_uses === null ? null : num(metadata.max_uses),
+      startsAt: text(row.starts_at) || null,
       endsAt: text(row.ends_at) || null,
+      uses: num(metadata.uses),
+      maxUses: nullableNum(metadata.max_uses),
+      maxUsesPerCustomer: nullableNum(metadata.max_uses_per_customer),
+      usageHistory: usageHistory(metadata.usage_history),
       active: Boolean(row.is_active),
     } satisfies DemoPromo;
   });
+}
+
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
+const asDateTime = (value: unknown, endOfDay = false): string => {
+  const raw = text(value);
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T${endOfDay ? '23:59' : '00:00'}`;
+  return raw.replace(' ', 'T');
+};
+
+/** Convierte una fila guardada (o una campaña legacy) al modelo actual. */
+function mapCampaignRow(item: unknown, index: number): DemoCampaign {
+  const row = asRow(item);
+  const application = text(row.application);
+  const legacyScope = text(row.scope);
+  const resolvedApplication =
+    application === 'collection' || application === 'product'
+      ? application
+      : legacyScope === 'collection' || legacyScope === 'product'
+        ? legacyScope
+        : 'store';
+  const legacyTarget = text(row.target);
+  const targets = asStringArray(row.targets);
+  const state = text(row.state);
+
+  return {
+    id: text(row.id) || `campaign-${index}`,
+    name: text(row.name),
+    type: text(row.type) === 'fixed' ? 'fixed' : 'percent',
+    value: num(row.value, num(row.percent)),
+    application: resolvedApplication,
+    targets: targets.length ? targets : legacyTarget ? [legacyTarget] : [],
+    minTotalCop: num(row.minTotalCop, num(row.min_total_cop)),
+    startsAt: asDateTime(row.startsAt) || asDateTime(row.starts_at),
+    endsAt: asDateTime(row.endsAt, true) || asDateTime(row.ends_at, true),
+    usageLimit: row.usageLimit === undefined || row.usageLimit === null ? null : num(row.usageLimit),
+    uses: num(row.uses),
+    customers: text(row.customers) === 'selected' ? 'selected' : 'all',
+    customerIds: asStringArray(row.customerIds),
+    state: state === 'paused' ? 'paused' : row.active === false ? 'paused' : 'enabled',
+    createdAt: text(row.createdAt) || text(row.created_at),
+  } satisfies DemoCampaign;
+}
+
+/**
+ * Campañas automáticas guardadas en `settings`. Lee el formato actual y, si no
+ * existe, migra silenciosamente el clave legacy `promotions.special_discounts`.
+ */
+export async function getCampaigns(supabase: SupabaseClient): Promise<DemoCampaign[]> {
+  const { data, error } = await supabase
+    .from('settings')
+    .select('key, value')
+    .in('key', ['promotions.campaigns', 'promotions.special_discounts']);
+
+  if (error || !data) return [];
+
+  const current = data.find((row) => text(row.key) === 'promotions.campaigns');
+  const legacy = data.find((row) => text(row.key) === 'promotions.special_discounts');
+  const source = current?.value ?? legacy?.value;
+  if (!Array.isArray(source)) return [];
+
+  return source.map(mapCampaignRow);
 }
 
 /* -------------------------- Eventos y equipo -------------------------- */

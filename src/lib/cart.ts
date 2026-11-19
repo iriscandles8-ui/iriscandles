@@ -22,7 +22,9 @@ export type CartLine = {
 
 export type CartTotals = {
   itemCount: number;
+  /** Subtotal antes del descuento. */
   subtotalCop: number;
+  discountCop: number;
   shippingCop: number;
   totalCop: number;
   isFreeShipping: boolean;
@@ -30,6 +32,7 @@ export type CartTotals = {
 };
 
 const STORAGE_KEY = 'iris.cart.v1';
+const COUPON_KEY = 'iris.coupon.v1';
 const MAX_QTY = 24;
 
 /** Evento que se dispara en `window` cada vez que cambia el carrito. */
@@ -45,7 +48,74 @@ type Variant = {
   size: ResolvedSize;
 };
 
+/* --------------------- Catálogo inyectado en Base.astro --------------------- */
+
+type CatalogEntry = {
+  sku: string;
+  slug: string;
+  name: string;
+  number: string;
+  aroma: string;
+  accent: string;
+  soft: string;
+  sizeLabel: string;
+  weightG: number;
+  priceCop: number | null;
+  stock: number;
+};
+
+let catalogBySku: Map<string, CatalogEntry> | null = null;
+
+/**
+ * Lee `#iris-catalog` (JSON serializado en Base.astro con el catálogo real de
+ * Supabase). Si no está, el carrito usa las colecciones estáticas.
+ */
+function catalog(): Map<string, CatalogEntry> | null {
+  if (catalogBySku) return catalogBySku;
+  if (typeof document === 'undefined') return null;
+  const node = document.getElementById('iris-catalog');
+  if (!node?.textContent) return null;
+  try {
+    const parsed: unknown = JSON.parse(node.textContent);
+    if (!Array.isArray(parsed)) return null;
+    const map = new Map<string, CatalogEntry>();
+    for (const entry of parsed) {
+      if (entry && typeof entry === 'object' && typeof (entry as CatalogEntry).sku === 'string') {
+        map.set((entry as CatalogEntry).sku, entry as CatalogEntry);
+      }
+    }
+    catalogBySku = map;
+    return map;
+  } catch {
+    return null;
+  }
+}
+
 function findVariant(sku: string): Variant | null {
+  const live = catalog();
+  if (live) {
+    // Catálogo inyectado presente: es la fuente de verdad. Un SKU que no
+    // aparece (o sin precio) ya no está disponible.
+    const entry = live.get(sku);
+    if (!entry || entry.priceCop == null) return null;
+    return {
+      slug: entry.slug,
+      collectionName: entry.name,
+      collectionNumber: entry.number,
+      aroma: entry.aroma,
+      accent: entry.accent,
+      soft: entry.soft,
+      size: {
+        label: entry.sizeLabel,
+        weightG: entry.weightG,
+        sku: entry.sku,
+        priceCop: entry.priceCop,
+        // El precio ya viene resuelto desde la base de datos.
+        provisional: false,
+      },
+    };
+  }
+
   for (const collection of collections) {
     for (const size of collection.sizes) {
       if (size.sku !== sku) continue;
@@ -128,6 +198,11 @@ export function removeFromCart(sku: string): CartItem[] {
 }
 
 export function clearCart(): CartItem[] {
+  try {
+    window.localStorage.removeItem(COUPON_KEY);
+  } catch {
+    /* sin almacenamiento */
+  }
   return persist([]);
 }
 
@@ -159,18 +234,74 @@ export function getLines(items: CartItem[] = readCart()): CartLine[] {
   });
 }
 
-export function getTotals(lines: CartLine[] = getLines()): CartTotals {
+export function getTotals(lines: CartLine[] = getLines(), discountCop = 0): CartTotals {
   const subtotalCop = lines.reduce((total, line) => total + line.lineTotalCop, 0);
-  const estimate = estimateShipping(subtotalCop);
+  const discount = Math.min(subtotalCop, Math.max(0, Math.round(discountCop)));
+  // El descuento se resta antes de calcular el envío y el umbral de envío gratis.
+  const netSubtotal = subtotalCop - discount;
+  const estimate = estimateShipping(netSubtotal);
 
   return {
     itemCount: lines.reduce((total, line) => total + line.qty, 0),
     subtotalCop,
+    discountCop: discount,
     shippingCop: estimate.costCop,
-    totalCop: subtotalCop + estimate.costCop,
+    totalCop: netSubtotal + estimate.costCop,
     isFreeShipping: estimate.isFree,
     missingForFreeCop: estimate.missingForFreeCop,
   };
+}
+
+/* ------------------------------ Cupón aplicado ------------------------------ */
+
+export type StoredCoupon = {
+  code: string;
+  type: 'percent' | 'fixed';
+  value: number;
+  label: string;
+};
+
+/** El cupón se guarda solo como descriptor: el importe se recalcula con el subtotal. */
+export function readCoupon(): StoredCoupon | null {
+  try {
+    const raw = window.localStorage.getItem(COUPON_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredCoupon>;
+    if (
+      typeof parsed.code !== 'string' ||
+      !parsed.code ||
+      (parsed.type !== 'percent' && parsed.type !== 'fixed') ||
+      !Number.isFinite(Number(parsed.value))
+    ) {
+      return null;
+    }
+    return {
+      code: parsed.code,
+      type: parsed.type,
+      value: Number(parsed.value),
+      label: typeof parsed.label === 'string' ? parsed.label : parsed.code,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveCoupon(coupon: StoredCoupon): void {
+  try {
+    window.localStorage.setItem(COUPON_KEY, JSON.stringify(coupon));
+  } catch {
+    /* Sin almacenamiento: el cupón vive solo en esta página. */
+  }
+  window.dispatchEvent(new CustomEvent(CART_EVENT));
+}
+
+export function clearCoupon(): void {
+  try {
+    window.localStorage.removeItem(COUPON_KEY);
+  } catch {
+    /* sin almacenamiento */
+  }
+  window.dispatchEvent(new CustomEvent(CART_EVENT));
 }
 
 /** Escucha cambios del carrito (incluidos los de otras pestañas). */

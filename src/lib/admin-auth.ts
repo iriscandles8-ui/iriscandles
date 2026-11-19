@@ -11,6 +11,8 @@ export type AdminActor = {
   email: string;
   role: string;
   canWriteOrders: boolean;
+  canWriteProducts: boolean;
+  canReadProducts: boolean;
 };
 
 /**
@@ -36,13 +38,43 @@ export async function getAdminActor(context: CookieContext): Promise<AdminActor 
 
   const role = String(admin.role ?? 'viewer');
   const permissions = (admin.permissions ?? {}) as Record<string, Record<string, boolean>>;
-  const canWriteOrders =
-    role === 'owner' || role === 'admin' || Boolean(permissions.orders?.write);
+  const isPrivileged = role === 'owner' || role === 'admin';
+  const canWriteOrders = isPrivileged || Boolean(permissions.orders?.write);
+  const canWriteProducts = isPrivileged || Boolean(permissions.products?.write);
+  const canReadProducts =
+    isPrivileged || role === 'viewer' || Boolean(permissions.products?.read);
 
   return {
     userId: user.id,
     email: user.email ?? '',
     role,
     canWriteOrders,
+    canWriteProducts,
+    canReadProducts,
   };
+}
+
+/**
+ * Igual que getAdminActor, pero exige permiso de escritura sobre un módulo
+ * concreto (p. ej. 'products'). Se usa en los endpoints de colecciones.
+ */
+export async function getAdminEditor(
+  context: CookieContext,
+  module: string,
+): Promise<AdminActor | null> {
+  const actor = await getAdminActor(context);
+  if (!actor) return null;
+  if (actor.role === 'owner' || actor.role === 'admin') return actor;
+
+  const supabase = createSupabaseServer(context);
+  if (!supabase) return null;
+
+  const { data: admin } = await supabase
+    .from('admin_users')
+    .select('permissions')
+    .eq('user_id', actor.userId)
+    .maybeSingle();
+
+  const permissions = (admin?.permissions ?? {}) as Record<string, Record<string, boolean>>;
+  return permissions[module]?.write ? actor : null;
 }

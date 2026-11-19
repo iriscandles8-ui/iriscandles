@@ -4,6 +4,9 @@ import { DEPARTMENTS } from '../data/departments';
 import { PAYMENT_METHODS } from '../data/payment';
 import { formatCOP, pricesAreProvisional, shipping } from '../data/pricing';
 
+// SSR para que los totales se calculen con el catálogo vigente.
+export const prerender = false;
+
 const departments = [...DEPARTMENTS];
 const paymentMethods = PAYMENT_METHODS;
 ---
@@ -250,6 +253,11 @@ const paymentMethods = PAYMENT_METHODS;
                 </a>
               </div>
 
+              <p data-summary-coupon-chip hidden class="mt-3 flex items-center justify-between gap-2 border border-dashed border-jade-900/25 bg-cream-100/60 px-3 py-2 text-[0.7rem]">
+                <span class="font-mono font-medium text-jade-900" data-summary-coupon-code></span>
+                <a href="/carrito" class="text-ink/70 underline underline-offset-2 hover:text-terracotta-700">Cambiar</a>
+              </p>
+
               <ul class="mt-4 divide-y divide-cream-300" data-summary-lines></ul>
 
               <dl class="mt-4 space-y-2.5 border-t border-cream-300 pt-4 text-sm">
@@ -260,6 +268,10 @@ const paymentMethods = PAYMENT_METHODS;
                 <div class="flex items-baseline justify-between gap-4">
                   <dt class="text-ink/75">Envío</dt>
                   <dd class="text-jade-900" data-summary-shipping>—</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 text-jade-700" data-summary-discount-row hidden>
+                  <dt class="text-jade-700">Descuento <span data-summary-coupon></span></dt>
+                  <dd data-summary-discount>—</dd>
                 </div>
                 <div class="flex items-baseline justify-between gap-4 border-t border-cream-300 pt-2.5">
                   <dt class="font-medium text-jade-900">Total</dt>
@@ -347,7 +359,8 @@ const paymentMethods = PAYMENT_METHODS;
 </Base>
 
 <script>
-  import { clearCart, getLines, getTotals, onCartChange } from '../lib/cart';
+  import { clearCart, clearCoupon, getLines, getTotals, onCartChange, readCoupon } from '../lib/cart';
+  import { couponDiscountCop } from '../lib/coupons';
   import { formatCOP } from '../data/pricing';
   import { socialLinks } from '../data/social';
 
@@ -358,6 +371,11 @@ const paymentMethods = PAYMENT_METHODS;
   const summaryLines = document.querySelector<HTMLElement>('[data-summary-lines]');
   const summarySubtotal = document.querySelector<HTMLElement>('[data-summary-subtotal]');
   const summaryShipping = document.querySelector<HTMLElement>('[data-summary-shipping]');
+  const summaryDiscountRow = document.querySelector<HTMLElement>('[data-summary-discount-row]');
+  const summaryDiscount = document.querySelector<HTMLElement>('[data-summary-discount]');
+  const summaryCoupon = document.querySelector<HTMLElement>('[data-summary-coupon]');
+  const summaryCouponChip = document.querySelector<HTMLElement>('[data-summary-coupon-chip]');
+  const summaryCouponCode = document.querySelector<HTMLElement>('[data-summary-coupon-code]');
   const summaryTotal = document.querySelector<HTMLElement>('[data-summary-total]');
   const shippingCost = document.querySelector<HTMLElement>('[data-shipping-cost]');
   const orderText = document.querySelector<HTMLElement>('[data-order-text]');
@@ -397,9 +415,15 @@ const paymentMethods = PAYMENT_METHODS;
     });
   }
 
-  function renderSummary() {
+  function currentTotals() {
     const lines = getLines();
-    const totals = getTotals(lines);
+    const coupon = readCoupon();
+    const discountCop = coupon ? couponDiscountCop(coupon, getTotals(lines).subtotalCop) : 0;
+    return { lines, coupon, totals: getTotals(lines, discountCop) };
+  }
+
+  function renderSummary() {
+    const { lines, coupon, totals } = currentTotals();
 
     if (loading) loading.hidden = true;
 
@@ -424,6 +448,11 @@ const paymentMethods = PAYMENT_METHODS;
 
     if (summarySubtotal) summarySubtotal.textContent = formatCOP(totals.subtotalCop);
     if (summaryShipping) summaryShipping.textContent = totals.isFreeShipping ? 'Gratis' : formatCOP(totals.shippingCop);
+    if (summaryDiscountRow) summaryDiscountRow.hidden = !coupon || totals.discountCop <= 0;
+    if (summaryDiscount) summaryDiscount.textContent = totals.discountCop ? `−${formatCOP(totals.discountCop)}` : '—';
+    if (summaryCoupon) summaryCoupon.textContent = coupon ? `(${coupon.code})` : '';
+    if (summaryCouponChip) summaryCouponChip.hidden = !coupon;
+    if (summaryCouponCode) summaryCouponCode.textContent = coupon?.code ?? '';
     if (summaryTotal) summaryTotal.textContent = formatCOP(totals.totalCop);
     if (shippingCost) shippingCost.textContent = totals.isFreeShipping ? 'Gratis' : formatCOP(totals.shippingCop);
   }
@@ -488,8 +517,7 @@ const paymentMethods = PAYMENT_METHODS;
   }
 
   function buildOrderText(reference?: string): string {
-    const lines = getLines();
-    const totals = getTotals(lines);
+    const { lines, coupon, totals } = currentTotals();
     const rows = lines.map(
       (line) => `${line.qty} × ${line.collectionName} ${line.size.label} — ${formatCOP(line.lineTotalCop)}`,
     );
@@ -511,6 +539,9 @@ const paymentMethods = PAYMENT_METHODS;
       ...rows,
       '',
       `Subtotal: ${formatCOP(totals.subtotalCop)}`,
+      ...(coupon && totals.discountCop
+        ? [`Descuento (${coupon.code}): −${formatCOP(totals.discountCop)}`]
+        : []),
       `Envío: ${totals.isFreeShipping ? 'Gratis' : formatCOP(totals.shippingCop)}`,
       `Total: ${formatCOP(totals.totalCop)}`,
       '',
@@ -593,10 +624,11 @@ const paymentMethods = PAYMENT_METHODS;
 
     if (!form.reportValidity()) return;
 
-    const lines = getLines();
+    const { lines, coupon } = currentTotals();
     if (lines.length === 0) return;
 
     const payload = {
+      couponCode: coupon?.code ?? null,
       customer: {
         name: fieldValue('name'),
         email: fieldValue('email'),
@@ -638,8 +670,10 @@ const paymentMethods = PAYMENT_METHODS;
         } catch {
           /* sin almacenamiento */
         }
-        clearCart();
+        // El resumen se genera antes de limpiar carrito y cupón.
         showDone(data.orderNumber, false);
+        clearCoupon();
+        clearCart();
         return;
       }
 

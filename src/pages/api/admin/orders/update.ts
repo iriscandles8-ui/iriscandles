@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getAdminActor } from '../../../../lib/admin-auth';
 import { mapOrderRow, ORDER_SELECT } from '../../../../lib/admin-data';
+import { paymentConfirmedEmail, sendEmail } from '../../../../lib/resend';
 import { createSupabaseAdmin } from '../../../../lib/supabase-admin';
 
 export const prerender = false;
@@ -94,6 +95,61 @@ async function decrementStock(
       created_by: userId,
     });
   }
+}
+
+/**
+ * Avisa al cliente que el pago quedó confirmado. Se ejecuta tras la primera
+ * aprobación (manual desde el panel o vía webhook de Wompi). Nunca falla la
+ * operación del pedido si el correo no sale.
+ */
+async function sendPaymentConfirmedEmail(
+  admin: Awaited<ReturnType<typeof createSupabaseAdmin>>,
+  orderId: string,
+) {
+  if (!admin) return;
+
+  const { data } = await admin
+    .from('orders')
+    .select(
+      'order_number, email, status, payment_status, subtotal_cop, shipping_cop, total_cop, shipping_address, payment_method, notes, order_items(product_name, size_label, quantity, subtotal_cop)',
+    )
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (!data) return;
+  const order = asRow(data);
+  const shipping = asRow(order.shipping_address);
+  const email = text(order.email, 140).toLowerCase();
+  if (!email) return;
+
+  const payload = paymentConfirmedEmail({
+    orderNumber: text(order.order_number, 40),
+    customerName: text(shipping.full_name, 90),
+    customerEmail: email,
+    items: (Array.isArray(order.order_items) ? order.order_items : []).map((raw) => {
+      const item = asRow(raw);
+      return {
+        productName: text(item.product_name, 160),
+        sizeLabel: text(item.size_label, 60),
+        quantity: Number(item.quantity) || 0,
+        subtotalCop: Number(item.subtotal_cop) || 0,
+      };
+    }),
+    subtotalCop: Number(order.subtotal_cop) || 0,
+    shippingCop: Number(order.shipping_cop) || 0,
+    totalCop: Number(order.total_cop) || 0,
+    paymentMethod: text(order.payment_method, 40) || 'Por definir',
+    city: text(shipping.city, 90),
+    department: text(shipping.department, 60),
+  });
+
+  await sendEmail({
+    to: email,
+    subject: payload.subject,
+    html: payload.html,
+    text: payload.text,
+    replyTo: 'hola@iriscandles.com',
+  });
 }
 
 export const POST: APIRoute = async ({ request, cookies }) => {
@@ -205,6 +261,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   if (firstApproval) {
     await decrementStock(admin, orderId, text(current.order_number), actor.userId);
+    await sendPaymentConfirmedEmail(admin, orderId);
   }
 
   const { data: updatedData, error: fetchError } = await admin

@@ -1,9 +1,12 @@
 ---
 import Base from '../layouts/Base.astro';
 import ProductCard from '../components/ProductCard.astro';
-import CandleAccent from '../components/CandleAccent.astro';
-import { collections } from '../data/collections';
+import { getStoreCollections } from '../lib/collection-data';
 import { pricesAreProvisional } from '../data/pricing';
+
+export const prerender = false;
+
+const collections = await getStoreCollections();
 ---
 
 <Base
@@ -22,13 +25,6 @@ import { pricesAreProvisional } from '../data/pricing';
       </p>
     </div>
 
-    <CandleAccent
-      src="/candles/vela-par-calido.webp"
-      width={611}
-      height={1110}
-      class="absolute bottom-0 right-5 hidden w-20 lg:block xl:right-10 xl:w-28"
-      delay={0.9}
-    />
   </section>
 
   <section class="py-12 lg:py-16">

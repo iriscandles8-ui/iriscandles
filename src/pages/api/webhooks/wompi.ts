@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { paymentConfirmedEmail, sendEmail } from '../../../lib/resend';
 import { createSupabaseAdmin } from '../../../lib/supabase-admin';
 import { isWompiConfigured, verifyWompiEvent } from '../../../lib/wompi';
 
@@ -28,6 +29,60 @@ const asRow = (value: unknown): Row =>
  *   3. Al recibir APPROVED, `confirm_order` marca el pedido como pagado y
  *      descuenta stock una sola vez.
  */
+/**
+ * Avisa al cliente que el pago quedó confirmado. Comparte el mismo criterio
+ * que el panel: solo corre en la primera aprobación y jamás rompe el webhook.
+ */
+async function notifyPaymentConfirmed(
+  admin: Awaited<ReturnType<typeof createSupabaseAdmin>>,
+  orderId: string,
+) {
+  if (!admin) return;
+
+  const { data } = await admin
+    .from('orders')
+    .select(
+      'order_number, email, subtotal_cop, shipping_cop, total_cop, shipping_address, payment_method, order_items(product_name, size_label, quantity, subtotal_cop)',
+    )
+    .eq('id', orderId)
+    .maybeSingle();
+  if (!data) return;
+
+  const order = (data ?? {}) as Record<string, unknown>;
+  const shipping = (order.shipping_address ?? {}) as Record<string, unknown>;
+  const email = String(order.email ?? '').trim().toLowerCase();
+  if (!email) return;
+
+  const payload = paymentConfirmedEmail({
+    orderNumber: String(order.order_number ?? ''),
+    customerName: String(shipping.full_name ?? ''),
+    customerEmail: email,
+    items: (Array.isArray(order.order_items) ? order.order_items : []).map((raw) => {
+      const item = (raw ?? {}) as Record<string, unknown>;
+      return {
+        productName: String(item.product_name ?? ''),
+        sizeLabel: String(item.size_label ?? ''),
+        quantity: Number(item.quantity) || 0,
+        subtotalCop: Number(item.subtotal_cop) || 0,
+      };
+    }),
+    subtotalCop: Number(order.subtotal_cop) || 0,
+    shippingCop: Number(order.shipping_cop) || 0,
+    totalCop: Number(order.total_cop) || 0,
+    paymentMethod: String(order.payment_method ?? '') || 'Por definir',
+    city: String(shipping.city ?? ''),
+    department: String(shipping.department ?? ''),
+  });
+
+  await sendEmail({
+    to: email,
+    subject: payload.subject,
+    html: payload.html,
+    text: payload.text,
+    replyTo: 'hola@iriscandles.com',
+  });
+}
+
 export const POST: APIRoute = async ({ request }) => {
   if (!(await isWompiConfigured())) {
     return json({ error: 'Wompi no está configurado.' }, 503);
@@ -75,6 +130,7 @@ export const POST: APIRoute = async ({ request }) => {
       console.error('[wompi] No se pudo confirmar el pedido:', confirmError);
       return json({ error: 'No se pudo confirmar el pedido.' }, 500);
     }
+    await notifyPaymentConfirmed(admin, order.id);
   }
 
   if (status === 'DECLINED' || status === 'VOIDED' || status === 'ERROR') {

@@ -6,6 +6,9 @@ interface Props {
   sublabel?: string;
   class?: string;
   size?: 'sm' | 'lg';
+  /** Foto principal de la colección. Nunca es una foto de producto. */
+  image?: string;
+  imageAlt?: string;
 }
 
 const {
@@ -15,6 +18,8 @@ const {
   sublabel = 'Hecho a mano',
   class: className = '',
   size = 'lg',
+  image = '',
+  imageAlt = '',
 } = Astro.props;
 ---
 
@@ -28,12 +33,26 @@ const {
   >
   </div>
   <div class="texture-paper absolute inset-0 opacity-[0.05]"></div>
-  <div
-    class="absolute left-1/2 top-1/3 h-36 w-36 -translate-x-1/2 rounded-full blur-3xl sm:h-48 sm:w-48"
-    style="background:var(--accent);opacity:.16"
-  >
-  </div>
 
+  {
+    image ? (
+      <img
+        src={image}
+        alt={imageAlt || label}
+        class="absolute inset-0 h-full w-full object-cover"
+        loading="lazy"
+      />
+    ) : (
+      <>
+        <div
+          class="absolute left-1/2 top-1/3 h-36 w-36 -translate-x-1/2 rounded-full blur-3xl sm:h-48 sm:w-48"
+          style="background:var(--accent);opacity:.16"
+        />
+      </>
+    )
+  }
+
+  {!image && (
   <div
     class:list={[
       'absolute bottom-[9%] left-1/2 -translate-x-1/2',
@@ -68,6 +87,7 @@ const {
       </div>
     </div>
   </div>
+  )}
 
   <div
     class="absolute bottom-3 left-4 right-4 flex items-center justify-between text-[8px] uppercase tracking-[0.2em] text-jade-900/45"

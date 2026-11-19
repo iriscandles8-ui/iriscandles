@@ -76,7 +76,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const variant = asRow(variantData);
   const product = asRow(variant.products);
   const sku = text(variant.sku);
-  const catalogVariant = findCatalogVariant(sku);
+  const catalogVariant = await findCatalogVariant(sku, admin);
   const unitPrice = Number(variant.price_cop) || catalogVariant?.unitPriceCop || 0;
 
   if (!unitPrice) {

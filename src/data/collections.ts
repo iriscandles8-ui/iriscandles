@@ -29,6 +29,8 @@ export type Collection = {
     deep: string;
   };
   number: string;
+  /** Foto principal gestionada desde el panel. Nunca es una foto de producto. */
+  heroImageUrl?: string;
 };
 
 export const collections: Collection[] = [
@@ -51,7 +53,7 @@ export const collections: Collection[] = [
     },
     sizes: [
       { label: '120 g', weightG: 120, sku: 'IRIS-OTONO-120', priceCop: null },
-      { label: '220 g', weightG: 220, sku: 'IRIS-OTONO-220', priceCop: null },
+      { label: '240 g', weightG: 240, sku: 'IRIS-OTONO-240', priceCop: null },
     ],
     theme: { accent: '#B85E37', soft: '#F3E9D6', deep: '#8F4526' },
     number: '01',
@@ -75,7 +77,7 @@ export const collections: Collection[] = [
     },
     sizes: [
       { label: '120 g', weightG: 120, sku: 'IRIS-VALLE-120', priceCop: null },
-      { label: '220 g', weightG: 220, sku: 'IRIS-VALLE-220', priceCop: null },
+      { label: '240 g', weightG: 240, sku: 'IRIS-VALLE-240', priceCop: null },
     ],
     theme: { accent: '#0E6B52', soft: '#E7F1EC', deep: '#064B3B' },
     number: '02',
@@ -99,7 +101,7 @@ export const collections: Collection[] = [
     },
     sizes: [
       { label: '120 g', weightG: 120, sku: 'IRIS-LOTO-120', priceCop: null },
-      { label: '220 g', weightG: 220, sku: 'IRIS-LOTO-220', priceCop: null },
+      { label: '240 g', weightG: 240, sku: 'IRIS-LOTO-240', priceCop: null },
     ],
     theme: { accent: '#D9917F', soft: '#F7E4DA', deep: '#8F4526' },
     number: '03',
@@ -123,7 +125,7 @@ export const collections: Collection[] = [
     },
     sizes: [
       { label: '120 g', weightG: 120, sku: 'IRIS-LUZ-120', priceCop: null },
-      { label: '220 g', weightG: 220, sku: 'IRIS-LUZ-220', priceCop: null },
+      { label: '240 g', weightG: 240, sku: 'IRIS-LUZ-240', priceCop: null },
     ],
     theme: { accent: '#B85E37', soft: '#F3E9D6', deep: '#064B3B' },
     number: '04',

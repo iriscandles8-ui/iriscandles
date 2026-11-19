@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Nombre del Worker: debe coincidir con el nombre del proyecto en Cloudflare.
+  "name": "iriscandles",
+  // No declarar "main": @astrojs/cloudflare usa su propio entrypoint y lo
+  // resuelve tanto en astro dev como en el build de producción.
+  "compatibility_date": "2026-11-10",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist/client"
+  },
+  "observability": { "enabled": true }
+}

@@ -7,7 +7,9 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "verify:media": "node scripts/verificar-biblioteca.mjs",
+    "verify:media:write": "node scripts/verificar-biblioteca.mjs --write"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.4.7",
